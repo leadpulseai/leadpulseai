@@ -70,10 +70,24 @@ def extract_lead_info(user_input):
 st.title("LeadPulse - Your AI-Powered Lead Assistant")
 st.header("What can I help with?")
 
-# Input prompt (dynamic placeholder flipping optional enhancement)
-prompt_input = st.text_input("", placeholder="Ask anything like 'I am interested in social media'", key="input")
+# Input box (opens a chat-style input and clears automatically)
+user_input = st.chat_input("Type your message...")
 
 # Process input
+if user_input:
+    # Extract and save lead info
+    extract_lead_info(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # Show typing spinner
+    with st.spinner("Lia is typing..."):
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=st.session_state.messages
+        )
+        reply = response.choices[0].message.content
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+
 if prompt_input:
     extract_lead_info(prompt_input)
     st.session_state.messages.append({"role": "user", "content": prompt_input})
@@ -96,4 +110,4 @@ for msg in st.session_state.messages[1:]:
 st.write("""</div>""", unsafe_allow_html=True)
 
 # Footer
-st.markdown("""<div class='footer'>Built with ❤️ by Shayan Faisal and Co-Founder</div>""", unsafe_allow_html=True)
+st.markdown("""<div class='footer'>FOUNDER  Shayan Faisal </div>""", unsafe_allow_html=True)
