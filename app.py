@@ -71,13 +71,13 @@ st.title("LeadPulse - Your AI-Powered Lead Assistant")
 st.header("What can I help with?")
 
 # Input box (opens a chat-style input and clears automatically)
-user_input = st.chat_input("Type your message...")
+prompt_input = st.chat_input("Type your message...")
 
 # Process input
-if user_input:
+if prompt_input:
     # Extract and save lead info
-    extract_lead_info(user_input)
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    extract_lead_info(prompt_input)
+    st.session_state.messages.append({"role": "user", "content": prompt_input})
 
     # Show typing spinner
     with st.spinner("Lia is typing..."):
