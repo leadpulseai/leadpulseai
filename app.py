@@ -100,8 +100,7 @@ placeholder = examples[st.session_state.ph_idx]
 st.session_state.ph_idx = (st.session_state.ph_idx + 1) % len(examples)
 
 # Chat‑style input
-user_prompt = st.chat_input("", placeholder=placeholder)
-
+user_prompt = st.chat_input(placeholder)
 if user_prompt:
     extract_lead_info(user_prompt)
     st.session_state.messages.append({"role": "user", "content": user_prompt})
