@@ -2,24 +2,41 @@ import streamlit as st
 from openai import OpenAI
 import os
 import re
-import random
 
 # Initialize OpenAI Client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Custom CSS for OpenAI‑style UI + send‑arrow hover
+# Custom CSS for Perplexity-style Premium Background
 st.markdown("""
     <style>
         body {
             background-color: #ffffff;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/8/88/Example_logo.png'); /* Replace with real logo */
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: 150px;
+            background-attachment: fixed;
             font-family: 'Segoe UI', sans-serif;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+            background-image: linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px), 
+                              linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            z-index: -1;
         }
         .chat-box {
             background-color: #f1f1f1;
             padding: 1rem;
             border-radius: 12px;
             margin: 1rem 0;
-            max-height: 60vh;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            max-height: 65vh;
             overflow-y: auto;
         }
         .user-msg {
@@ -28,7 +45,7 @@ st.markdown("""
             text-align: right;
             padding: 0.8rem;
             border-radius: 10px;
-            margin-bottom: 0.5rem;
+            margin-bottom: 5px;
             max-width: 75%;
             margin-left: 25%;
         }
@@ -37,17 +54,13 @@ st.markdown("""
             color: #3c4043;
             padding: 0.8rem;
             border-radius: 10px;
-            margin-bottom: 0.5rem;
+            margin-bottom: 5px;
             max-width: 75%;
-        }
-        /* send‑arrow hover */
-        button[data-testid="stMarkdownContainer"] svg:hover {
-            stroke: #1a73e8;
         }
         .footer {
             text-align: center;
             font-size: 0.8rem;
-            color: #888;
+            color: #999;
             margin-top: 2rem;
         }
     </style>
@@ -56,18 +69,12 @@ st.markdown("""
 # Session State Setup
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are Lia, a friendly AI lead assistant. "
-                "Greet the user, then ask for their name, email, and interest in a natural way."
-            )
-        }
+        {"role": "system", "content": "You are Lia, a helpful AI lead assistant. Greet the user and capture their name, email, and interest."}
     ]
 
 lead_data = {"name": None, "email": None, "interest": None}
 
-# Extract lead info
+# Extract Lead Info
 def extract_lead_info(user_input: str):
     if not lead_data["email"]:
         m = re.search(r"\b[\w.-]+@[\w.-]+\.\w+\b", user_input)
@@ -80,50 +87,50 @@ def extract_lead_info(user_input: str):
         st.success(f"😊 Name captured: {lead_data['name']}")
 
     if not lead_data["interest"] and "interested in" in user_input.lower():
-        lead_data["interest"] = user_input.split("interested in")[-1].strip().split(".")[0]
+        lead_data["interest"] = user_input.split("interested in")[-1].strip().split('.')[0]
         st.success(f"✅ Interest captured: {lead_data['interest']}")
 
-# UI – Header
+# App UI
 st.title("LeadPulse 🚀")
-st.header("What can I help with?")
 
-# Dynamic placeholders
+import time
 examples = [
-    "I am interested in social media",
-    "My name is Jane",
-    "Tell me about lead generation",
-    "Explain in 30 seconds"
+    "Ask me anything about your business...",
+    "How can I help you grow today?",
+    "Need help capturing leads?",
+    "Ask Lia for anything!",
+    "Tell me your business goals..."
 ]
 if "ph_idx" not in st.session_state:
     st.session_state.ph_idx = 0
 placeholder = examples[st.session_state.ph_idx]
 st.session_state.ph_idx = (st.session_state.ph_idx + 1) % len(examples)
 
-# Chat‑style input
-user_prompt = st.chat_input(placeholder)
-if user_prompt:
-    extract_lead_info(user_prompt)
-    st.session_state.messages.append({"role": "user", "content": user_prompt})
+# Typing bar input
+user_prompt = st.chat_input(placeholder=placeholder)
 
-    with st.spinner("Lia is typing..."):
-        resp = client.chat.completions.create(
+# Process input
+if user_prompt:
+    st.session_state.messages.append({"role": "user", "content": user_prompt})
+    extract_lead_info(user_prompt)
+
+    with st.spinner("Lia is thinking..."):
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=st.session_state.messages
         )
-        answer = resp.choices[0].message.content
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        reply = response.choices[0].message.content
 
-# Display the chat
-st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
+    st.session_state.messages.append({"role": "assistant", "content": reply})
+
+# Display chat messages
+st.write("""<div class='chat-box'>""", unsafe_allow_html=True)
 for msg in st.session_state.messages[1:]:
     if msg["role"] == "user":
         st.markdown(f"<div class='user-msg'>{msg['content']}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='bot-msg'>{msg['content']}</div>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+st.write("""</div>""", unsafe_allow_html=True)
 
-# Footer credit
-st.markdown(
-    "<div class='footer'> FOUNDER Shayan Faisal </div>",
-    unsafe_allow_html=True
-)
+# Footer
+st.markdown("""<div class='footer'>Built with ❤️ by Founder Shayan Faisal & Co-Founder</div>""", unsafe_allow_html=True)
