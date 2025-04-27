@@ -3,8 +3,20 @@ from openai import OpenAI
 import os
 import re
 
-# Initialize OpenAI Client
+# Initialize OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Safe call example
+try:
+    st.write("🚀 Testing OpenAI...")
+    test_response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": "You are a test bot"}, {"role": "user", "content": "Hello"}]
+    )
+    st.success("✅ OpenAI API Test Success")
+except Exception as e:
+    st.error(f"❌ OpenAI API Error: {e}")
+
 
 # Custom CSS for Perplexity-style Premium Background
 st.markdown("""
