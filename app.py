@@ -133,4 +133,19 @@ for msg in st.session_state.messages[1:]:
 st.write("""</div>""", unsafe_allow_html=True)
 
 # Footer
-st.markdown("""<div class='footer'>Built with ❤️ by Founder Shayan Faisal & Co-Founder</div>""", unsafe_allow_html=True)
+if user_prompt:
+    st.write("📩 User Prompt Received:", user_prompt)  # 👈 Debug Line
+
+    st.session_state.messages.append({"role": "user", "content": user_prompt})
+    extract_lead_info(user_prompt)
+
+    with st.spinner("Lia is thinking..."):
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=st.session_state.messages
+        )
+        reply = response.choices[0].message.content
+
+    st.write("🤖 Bot Reply Generated:", reply)  # 👈 Debug Line
+
+    st.session_state.messages.append({"role": "assistant", "content": reply})
