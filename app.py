@@ -7,7 +7,7 @@ import random
 # Initialize OpenAI Client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Custom CSS for OpenAI‑style UI + send‑arrow hover
+# Custom CSS for OpenAI-style UI + send-arrow hover
 st.markdown("""
     <style>
         body {
@@ -40,7 +40,6 @@ st.markdown("""
             margin-bottom: 0.5rem;
             max-width: 75%;
         }
-        /* send‑arrow hover */
         button[data-testid="stMarkdownContainer"] svg:hover {
             stroke: #1a73e8;
         }
@@ -99,20 +98,25 @@ if "ph_idx" not in st.session_state:
 placeholder = examples[st.session_state.ph_idx]
 st.session_state.ph_idx = (st.session_state.ph_idx + 1) % len(examples)
 
-# Chat‑style input
-user_prompt = st.chat_input("", placeholder=placeholder)
+# Chat-style input (✅ FIXED input syntax)
+user_prompt = st.chat_input(placeholder=placeholder)
 
+# Process input with safety
 if user_prompt:
-    extract_lead_info(user_prompt)
-    st.session_state.messages.append({"role": "user", "content": user_prompt})
+    try:
+        extract_lead_info(user_prompt)
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
 
-    with st.spinner("Lia is typing..."):
-        resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=st.session_state.messages
-        )
-        answer = resp.choices[0].message.content
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        with st.spinner("Lia is typing..."):
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=st.session_state.messages
+            )
+            reply = response.choices[0].message.content
+
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+    except Exception as e:
+        st.error(f"❌ Error generating Lia's response: {e}")
 
 # Display the chat
 st.markdown("<div class='chat-box'>", unsafe_allow_html=True)
