@@ -99,7 +99,8 @@ placeholder = examples[st.session_state.ph_idx]
 st.session_state.ph_idx = (st.session_state.ph_idx + 1) % len(examples)
 
 # Chat-style input (✅ FIXED input syntax)
-user_prompt = st.chat_input(placeholder=placeholder)
+
+user_prompt = st.chat_input(placeholder)
 
 # Process input with safety
 if user_prompt:
