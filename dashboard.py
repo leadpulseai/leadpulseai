@@ -19,7 +19,8 @@ if os.path.exists(leads_file):
 
     # 📂 Parse the data
     leads = [line.strip().split(" | ") for line in lines if line.strip()]
-    df = pd.DataFrame(leads, columns=["Name", "Email", "Interest"])
+   df = pd.DataFrame(leads, columns=["Name", "Email", "Interest", "Phone"])
+
 
     # 🌀 Display the DataFrame
     st.dataframe(df, use_container_width=True)
