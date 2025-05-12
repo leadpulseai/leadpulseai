@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 from openai import OpenAI
+
 # Initialize OpenAI Client
 api_key = os.getenv("OPENAI_API_KEY")
 st.write("🔑 API Key Loaded:", bool(api_key))  # Debug: confirm API key presence
