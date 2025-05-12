@@ -1,23 +1,34 @@
-from datetime import datetime
-from pathlib import Path
-
-# Sample new app.py with phone number capture, fully structured
-code = '''
 import streamlit as st
 from openai import OpenAI
 import os
 import re
-import csv
+from datetime import datetime
 
-# Initialize OpenAI Client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# 1. Initialize OpenAI client securely
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
 
-# Custom CSS for OpenAI-style UI + chat layout
-st.markdown(\"""
+# 2. Custom Perplexity-inspired UI and embedded branding
+st.markdown("""
     <style>
         body {
             background-color: #ffffff;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/8/88/Example_logo.png');
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: 150px;
+            background-attachment: fixed;
             font-family: 'Segoe UI', sans-serif;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0;
+            height: 100%; width: 100%;
+            background-image: linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px), 
+                              linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            z-index: -1;
         }
         .chat-box {
             background-color: #f1f1f1;
@@ -33,7 +44,7 @@ st.markdown(\"""
             text-align: right;
             padding: 0.8rem;
             border-radius: 10px;
-            margin-bottom: 0.5rem;
+            margin-bottom: 5px;
             max-width: 75%;
             margin-left: 25%;
         }
@@ -42,101 +53,94 @@ st.markdown(\"""
             color: #3c4043;
             padding: 0.8rem;
             border-radius: 10px;
-            margin-bottom: 0.5rem;
+            margin-bottom: 5px;
             max-width: 75%;
         }
         .footer {
             text-align: center;
             font-size: 0.8rem;
-            color: #888;
+            color: #999;
             margin-top: 2rem;
         }
     </style>
-\""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# Session State Setup
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": "You are Lia, a helpful AI lead assistant. Greet the user and capture their name, email, interest, and phone number."}
-    ]
+# 3. Lead data storage
+lead_data = {"name": None, "email": None, "phone": None, "interest": None}
 
-lead_data = {"name": None, "email": None, "interest": None, "phone": None}
-
+# 4. Extract function
 def extract_lead_info(user_input: str):
     if not lead_data["email"]:
-        m = re.search(r"\\b[\\w.-]+@[\\w.-]+\\.\\w+\\b", user_input)
-        if m:
-            lead_data["email"] = m.group()
-            st.success(f"📧 Email captured: {lead_data['email']}")
+        match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", user_input)
+        if match:
+            lead_data["email"] = match.group()
+            st.success(f"📧 Email: {lead_data['email']}")
+
+    if not lead_data["phone"]:
+        match = re.search(r"\b\d{10,15}\b", user_input)
+        if match:
+            lead_data["phone"] = match.group()
+            st.success(f"📞 Phone: {lead_data['phone']}")
 
     if not lead_data["name"] and "my name is" in user_input.lower():
         lead_data["name"] = user_input.split("my name is")[-1].strip().split()[0].capitalize()
-        st.success(f"😊 Name captured: {lead_data['name']}")
+        st.success(f"🧑 Name: {lead_data['name']}")
 
     if not lead_data["interest"] and "interested in" in user_input.lower():
         lead_data["interest"] = user_input.split("interested in")[-1].strip().split('.')[0]
-        st.success(f"✅ Interest captured: {lead_data['interest']}")
+        st.success(f"💼 Interest: {lead_data['interest']}")
 
-    if not lead_data["phone"]:
-        phone_match = re.search(r"\\+?\\d[\\d\\s\\-]{7,14}\\d", user_input)
-        if phone_match:
-            lead_data["phone"] = phone_match.group().strip()
-            st.success(f"📞 Phone number captured: {lead_data['phone']}")
+    # Save lead to leads.txt
+    if all(lead_data.values()):
+        with open("leads.txt", "a") as f:
+            f.write(f"{lead_data['name']} {lead_data['email']} {lead_data['phone']} {lead_data['interest']} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-# UI – Header
+# 5. UI – Header and flipping placeholder
 st.title("LeadPulse 🚀")
 st.header("What can I help with?")
 
 examples = [
-    "I'm interested in marketing.",
-    "My name is Ayesha",
-    "I need help capturing leads.",
-    "Here's my phone number +92 300 1234567"
+    "I am interested in social media",
+    "My name is Ali and I want help",
+    "Contact: ali@example.com, 03001234567",
+    "What’s the best way to get leads?",
+    "I need help with marketing"
 ]
 if "ph_idx" not in st.session_state:
     st.session_state.ph_idx = 0
 placeholder = examples[st.session_state.ph_idx]
 st.session_state.ph_idx = (st.session_state.ph_idx + 1) % len(examples)
 
-# Input + Chat
+# 6. Session memory
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": "You are Lia, an AI lead assistant. Greet warmly. Ask for user's name, email, phone, and interest smoothly."}
+    ]
+
+# 7. Chat input
 user_prompt = st.chat_input(placeholder=placeholder)
 
 if user_prompt:
     st.session_state.messages.append({"role": "user", "content": user_prompt})
     extract_lead_info(user_prompt)
 
-    with st.spinner("Lia is typing..."):
+    with st.spinner("Lia is thinking..."):
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=st.session_state.messages
         )
         reply = response.choices[0].message.content
-        st.session_state.messages.append({"role": "assistant", "content": reply})
 
-    # Save to CSV
-    if all(lead_data.values()):
-        with open("leads.csv", mode="a", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                lead_data["name"],
-                lead_data["email"],
-                lead_data["interest"],
-                lead_data["phone"]
-            ])
+    st.session_state.messages.append({"role": "assistant", "content": reply})
 
-# Chat display
-st.write(\"""<div class='chat-box'>\""", unsafe_allow_html=True)
+# 8. Display messages
+st.write("<div class='chat-box'>", unsafe_allow_html=True)
 for msg in st.session_state.messages[1:]:
     if msg["role"] == "user":
         st.markdown(f"<div class='user-msg'>{msg['content']}</div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='bot-msg'>{msg['content']}</div>", unsafe_allow_html=True)
-st.write(\"""</div>\""", unsafe_allow_html=True)
+st.write("</div>", unsafe_allow_html=True)
 
-# Footer
-st.markdown("<div class='footer'>Built with ❤️ by Shayan Faisal and Co-Founder</div>", unsafe_allow_html=True)
-'''
-
-Path("/mnt/data/app_with_phone_capture.py").write_text(code)
-"/mnt/data/app_with_phone_capture.py"
+# 9. Footer
+st.markdown("<div class='footer'>Built with ❤️ by Founder Shayan Faisal & Co-Founder</div>", unsafe_allow_html=True)
