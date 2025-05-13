@@ -3,6 +3,12 @@ from openai import OpenAI
 import os
 import re
 from datetime import datetime
+from dotenv import load_dotenv 
+load_dotenv()                   
+st.write("✅ API Key Loaded:", bool(os.getenv("OPENAI_API_KEY")))
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 # 1. Initialize OpenAI client securely
 api_key = os.getenv("OPENAI_API_KEY")
@@ -119,6 +125,17 @@ if "messages" not in st.session_state:
 
 # 7. Chat input
 user_prompt = st.chat_input(placeholder=placeholder)
+try:
+    test_response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Test system"},
+            {"role": "user", "content": "Say hello"},
+        ]
+    )
+    st.success("✅ OpenAI Test Passed")
+except Exception as e:
+    st.error(f"❌ OpenAI Error: {e}")
 
 if user_prompt:
     st.session_state.messages.append({"role": "user", "content": user_prompt})
