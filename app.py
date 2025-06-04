@@ -1,4 +1,8 @@
-import streamlit as st from openai import OpenAI import os import re from datetime import datetime
+import streamlit as st
+from openai import OpenAI
+import os
+import re
+from datetime import datetime
 
 # Use Streamlit's secrets for cloud compatibility
 
