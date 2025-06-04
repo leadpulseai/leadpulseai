@@ -16,17 +16,22 @@ st.markdown(""" <style> body { background-color: #ffffff; background-image: url(
 
 lead_data = {"name": None, "email": None, "phone": None, "interest": None}
 
-def extract_lead_info(user_input: str): if not lead_data["email"]: match = re.search(r"[\w.-]+@[\w.-]+.\w+", user_input) if match: lead_data["email"] = match.group() st.success(f"📧 Email: {lead_data['email']}")
+def extract_lead_info(user_input: str):
+    # Check for email if not already found
+    if not lead_data["email"]:
+        match = re.search(r"[\w.-]+@[\w.-]+\.\w+", user_input)
+        if match:
+            lead_data["email"] = match.group()
+            st.success(f"📧 Email: {lead_data['email']}") # Assuming this was the rest of the line
 
-if not lead_data["phone"]:
-    match = re.search(r"\b\d{10,15}\b", user_input)
-    if match:
-        lead_data["phone"] = match.group()
-        st.success(f"📞 Phone: {lead_data['phone']}")
+    # --- Add the rest of your checks for phone, name, interest here --- 
+    # --- Make sure they are also indented correctly under the def --- 
 
-if not lead_data["name"] and "my name is" in user_input.lower():
-    lead_data["name"] = user_input.split("my name is")[-1].strip().split()[0].capitalize()
-    st.success(f"🧑 Name: {lead_data['name']}")
+    # Example for phone check (adjust based on your actual code)
+    if not lead_data["phone"]:
+        match = re.search(r"\b\d{10,15}\b", user_input)
+        if match:
+            lead_data["phone"] = match.group()
+            st.success(f"📞 Phone: {lead_data['phone']}")
 
-if not lead_data["interest"] and "interested in" in user_input.lower():
-    lead_data["interest"]
+    # ... etc for name and interest
