@@ -562,11 +562,11 @@ def main():
     setup_admin_credentials()
     
     # Check if we're in admin mode
-    if "admin" in st.experimental_get_query_params():
+    if "admin" in st.query_params:  # Changed from st.experimental_get_query_params()
         admin_page()
     else:
-        chat_page()
-
+        chat_page() 
+        
 def chat_page():
     st.title("Lia - Your AI Lead Assistant")
 
