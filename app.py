@@ -537,4 +537,5 @@ def admin_page():
                 filtered_df = filtered_df[
                     filtered_df['name'].fillna('').str.lower().str.contains(search_term) |
                     filtered_df['email'].fillna('').str.lower().str.contains(search_term) |
-                    filtered_df['company'].fillna('').str.lower().str.contains(search_
+                    filtered_df['company'].fillna('').str.lower().str.contains(search_term)
+                ]
