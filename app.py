@@ -1,4 +1,4 @@
-    import streamlit as st
+import streamlit as st
 from openai import OpenAI
 import os
 import re
@@ -81,6 +81,7 @@ def extract_lead_info(user_input: str):
     """Extracts lead information using regex and updates session state."""
     lead_data = st.session_state.lead_data
     updated = False
+    user_input_lower = user_input.lower() # Work with lowercase for matching
 
     # Email Extraction
     if not lead_data["email"]:
@@ -90,76 +91,76 @@ def extract_lead_info(user_input: str):
             st.toast(f"📧 Email captured: {lead_data['email']}")
             updated = True
 
-    # Phone Extraction (Improved slightly)
+    # Phone Extraction (More flexible)
     if not lead_data["phone"]:
-        # Looks for sequences of digits, possibly with spaces, hyphens, parentheses, starting with optional +
-        match = re.search(r"(\+?\d{1,3}[-\s.]?)?(\(?\d{3}\)?[-\s.]?)?\d{3}[-\s.]?\d{4}\b", user_input)
+        # Look for sequences of 7-15 digits, possibly with spaces/hyphens
+        # Triggered by phrases like "my phone is", "call me at", or just finds a likely number
+        match = re.search(r"(?:my\s+phone(?:\s+number)?\s+is|call\s+me\s+at)?\s*(\+?[\d\s-]{7,15}\d)\b", user_input_lower)
         if match:
             # Clean up the extracted number (remove non-digits, except leading +)
-            phone_number = re.sub(r"[()\s-]", "", match.group())
+            phone_number = re.sub(r"[()\s-]", "", match.group(1))
             lead_data["phone"] = phone_number
             st.toast(f"📞 Phone captured: {lead_data['phone']}")
             updated = True
 
     # Name Extraction (Refined)
     if not lead_data["name"]:
-        # Look for patterns like "my name is [Name]", "I'm [Name]", "call me [Name]"
-        # Captures one or more capitalized words following the pattern
-        match = re.search(r"(?:my\s+name\s+is|I'm|I\s+am|call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", user_input, re.IGNORECASE)
+        match = re.search(r"(?:my\s+name\s+is|I\'m|I\s+am|call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", user_input, re.IGNORECASE) # Use original case input here
         if match:
             lead_data["name"] = match.group(1).strip()
             st.toast(f"👤 Name captured: {lead_data['name']}")
             updated = True
 
-    # Interest Extraction
+    # Interest Extraction (More flexible)
     if not lead_data["interest"]:
-        match = re.search(r"(?:interested\s+in|looking\s+for|need\s+help\s+with)\s+(.+)", user_input, re.IGNORECASE)
+        # Added "my interest is"
+        match = re.search(r"(?:interested\s+in|looking\s+for|need\s+help\s+with|my\s+interest\s+is)\s+(.+)", user_input_lower)
         if match:
-            # Simple capture, might need refinement based on common interests
             interest = match.group(1).strip()
-            # Avoid capturing overly long sentences
             if len(interest.split()) < 15: 
-                lead_data["interest"] = interest
+                lead_data["interest"] = interest.capitalize() # Capitalize first letter
                 st.toast(f"💡 Interest captured: {lead_data['interest']}")
                 updated = True
                 
-    # Company Extraction (New)
+    # Company Extraction
     if not lead_data["company"]:
-        match = re.search(r"(?:work\s+at|work\s+for|my\s+company\s+is|from\s+the\s+company)\s+([A-Z][A-Za-z\s&.,'-]+)", user_input, re.IGNORECASE)
+        match = re.search(r"(?:work\s+at|work\s+for|my\s+company\s+is|from\s+the\s+company)\s+([A-Z][A-Za-z\s&.,\[\]\{\}\\'-]+)", user_input, re.IGNORECASE) # Use original case input
         if match:
             lead_data["company"] = match.group(1).strip()
             st.toast(f"🏢 Company captured: {lead_data['company']}")
             updated = True
             
-    # Update session state explicitly if changes were made
     if updated:
         st.session_state.lead_data = lead_data
 
-def get_openai_response(prompt: str):
+def get_openai_response(): # Removed prompt argument, uses session state directly
     """Gets a response from OpenAI based on the current conversation history."""
-    # Add the user's prompt to the history before sending to OpenAI
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    try:
-        # Construct messages payload for OpenAI
-        # Optional: Add a system prompt to guide Lia's behavior
-        system_prompt = {"role": "system", "content": "You are Lia, a friendly and helpful AI lead generation assistant for LeadPulse. Your goal is to understand the user's needs, collect relevant information (name, email, company, interest) naturally through conversation, and qualify them as a lead. Be conversational and engaging. Ask clarifying questions if needed. Keep responses concise."}
-        messages_for_api = [system_prompt] + st.session_state.messages
+    # Ensure the latest user message is in session state before calling API
+    if not st.session_state.messages or st.session_state.messages[-1]["role"] != "user":
+        # This should ideally not happen if called correctly, but safety check
+        return "Hmm, I seem to have missed what you just said. Could you please repeat that?"
         
-        # Make the API call
+    try:
+        system_prompt = {"role": "system", "content": "You are Lia, a friendly and helpful AI lead generation assistant for LeadPulse. Your goal is to understand the user's needs, collect relevant information (name, email, company, phone, interest) naturally through conversation, and qualify them as a lead. Be conversational and engaging. Ask clarifying questions if needed. Keep responses concise and friendly."}
+        messages_for_api = [system_prompt] + st.session_state.messages # Send the whole history
+        
+        print(f"DEBUG: Sending to OpenAI: {messages_for_api}") # Debug print
+
         completion = client.chat.completions.create(
-            model="gpt-4o", # Or your preferred model
+            model="gpt-4o",
             messages=messages_for_api,
-            temperature=0.7, # Adjust for creativity vs. predictability
-            max_tokens=150 # Limit response length
+            temperature=0.7,
+            max_tokens=150
         )
         response_content = completion.choices[0].message.content
+        
+        print(f"DEBUG: Received from OpenAI: {response_content}") # Debug print
         return response_content
 
     except Exception as e:
+        print(f"ERROR: OpenAI API call failed: {e}") # Debug print for error
         st.error(f"Error communicating with OpenAI: {e}")
-        # Provide a fallback response
-        return "Sorry, I'm having trouble connecting right now. Please try again in a moment."
+        return "Sorry, I encountered a technical glitch. Please give me a moment and try again."
 
 # --- Main Chat Interface Logic --- 
 
@@ -173,12 +174,15 @@ if prompt := st.chat_input("What can Lia help you with?"):
     # Display user message immediately
     with st.chat_message("user"):
         st.markdown(prompt)
+    
+    # Add user message to chat history *first*
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Extract lead info from the user's prompt *before* getting AI response
+    # Extract lead info from the latest prompt
     extract_lead_info(prompt)
 
-    # Get response from OpenAI (this function now also appends the user message to history)
-    assistant_response = get_openai_response(prompt)
+    # Get response from OpenAI (uses history including the latest prompt)
+    assistant_response = get_openai_response()
 
     # Display assistant response
     with st.chat_message("assistant"):
