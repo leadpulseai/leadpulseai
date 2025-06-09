@@ -2,7 +2,9 @@ import streamlit as st
 from openai import OpenAI
 import os
 import re
+import json
 from datetime import datetime
+import pandas as pd
 
 # --- Configuration & Initialization --- 
 
@@ -21,8 +23,6 @@ except Exception as e:
 st.markdown(""" <style> 
 body { 
     background-color: #ffffff; 
-    /* Optional: Add background image if needed, ensure URL is correct */
-    /* background-image: url('...'); */
     background-repeat: no-repeat; 
     background-position: center center; 
     background-size: 150px; 
@@ -61,6 +61,21 @@ body::before {
     color: #999; 
     margin-top: 2rem; 
 }
+.lead-score {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+    margin: 1rem 0;
+}
+.score-hot {
+    color: #ff4b4b;
+}
+.score-warm {
+    color: #ffa64b;
+}
+.score-cold {
+    color: #4b83ff;
+}
 </style> """, unsafe_allow_html=True)
 
 st.title("Lia - Your AI Lead Assistant")
@@ -73,12 +88,28 @@ if "messages" not in st.session_state:
 
 # Initialize lead data in session state if it doesn't exist
 if "lead_data" not in st.session_state:
-    st.session_state.lead_data = {"name": None, "email": None, "phone": None, "interest": None, "company": None} # Added company
+    st.session_state.lead_data = {
+        "name": None, 
+        "email": None, 
+        "phone": None, 
+        "interest": None, 
+        "company": None,
+        "industry": None,
+        "pain_points": None,
+        "buying_signals": [],
+        "lead_score": 0,
+        "lead_status": "New",
+        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+# Initialize message counter for periodic analysis
+if "message_counter" not in st.session_state:
+    st.session_state.message_counter = 0
 
 # --- Core Functions --- 
 
-def extract_lead_info(user_input: str):
-    """Extracts lead information using regex and updates session state."""
+def extract_lead_info_regex(user_input: str):
+    """Extracts lead information using regex patterns and updates session state."""
     lead_data = st.session_state.lead_data
     updated = False
     user_input_lower = user_input.lower() # Work with lowercase for matching
@@ -95,7 +126,7 @@ def extract_lead_info(user_input: str):
     if not lead_data["phone"]:
         # Look for sequences of 7-15 digits, possibly with spaces/hyphens
         # Triggered by phrases like "my phone is", "call me at", or just finds a likely number
-        match = re.search(r"(?:my\s+phone(?:\s+number)?\s+is|call\s+me\s+at)?\s*(\+?[\d\s-]{7,15}\d)\b", user_input_lower)
+        match = re.search(r"(?:my\s+phone(?:\s+number)?\s+is|call\s+me\s+at|reach\s+me\s+at)?\s*(\+?[\d\s-]{7,15}\d)\b", user_input_lower)
         if match:
             # Clean up the extracted number (remove non-digits, except leading +)
             phone_number = re.sub(r"[()\s-]", "", match.group(1))
@@ -105,7 +136,8 @@ def extract_lead_info(user_input: str):
 
     # Name Extraction (Refined)
     if not lead_data["name"]:
-        match = re.search(r"(?:my\s+name\s+is|I\'m|I\s+am|call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", user_input, re.IGNORECASE) # Use original case input here
+        # Expanded to catch more variations
+        match = re.search(r"(?:my\s+name\s+is|I\'m|I\s+am|call\s+me|this\s+is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", user_input, re.IGNORECASE)
         if match:
             lead_data["name"] = match.group(1).strip()
             st.toast(f"👤 Name captured: {lead_data['name']}")
@@ -113,39 +145,252 @@ def extract_lead_info(user_input: str):
 
     # Interest Extraction (More flexible)
     if not lead_data["interest"]:
-        # Added "my interest is"
-        match = re.search(r"(?:interested\s+in|looking\s+for|need\s+help\s+with|my\s+interest\s+is)\s+(.+)", user_input_lower)
+        # Expanded to catch implied interests
+        match = re.search(r"(?:interested\s+in|looking\s+for|need\s+help\s+with|my\s+interest\s+is|thinking\s+about|considering|exploring|working\s+with|focused\s+on)\s+(.+?)[\.,:;!?]", user_input_lower)
         if match:
             interest = match.group(1).strip()
             if len(interest.split()) < 15: 
-                lead_data["interest"] = interest.capitalize() # Capitalize first letter
+                lead_data["interest"] = interest.capitalize()
                 st.toast(f"💡 Interest captured: {lead_data['interest']}")
                 updated = True
                 
-    # Company Extraction
+    # Company Extraction (Enhanced)
     if not lead_data["company"]:
-        match = re.search(r"(?:work\s+at|work\s+for|my\s+company\s+is|from\s+the\s+company)\s+([A-Z][A-Za-z\s&.,\[\]\{\}\\'-]+)", user_input, re.IGNORECASE) # Use original case input
+        match = re.search(r"(?:work\s+at|work\s+for|my\s+company\s+is|from\s+the\s+company|our\s+company|we\s+at|with\s+company)\s+([A-Z][A-Za-z0-9\s&.,\[\]\{\}\\'-]+)", user_input, re.IGNORECASE)
         if match:
             lead_data["company"] = match.group(1).strip()
             st.toast(f"🏢 Company captured: {lead_data['company']}")
             updated = True
             
+    # Industry Extraction (New)
+    if not lead_data["industry"]:
+        industry_patterns = [
+            r"(?:in\s+the|work\s+in|industry\s+is)\s+([\w\s]+?)\s+(?:industry|sector|field)",
+            r"(?:from|in)\s+the\s+([\w\s]+?)\s+(?:industry|sector|field)"
+        ]
+        for pattern in industry_patterns:
+            match = re.search(pattern, user_input_lower)
+            if match:
+                lead_data["industry"] = match.group(1).strip().capitalize()
+                st.toast(f"🏭 Industry captured: {lead_data['industry']}")
+                updated = True
+                break
+    
+    # Buying Signals (New)
+    buying_signal_patterns = [
+        r"(?:how\s+much|pricing|cost|price|quote|demo|trial|purchase|buy|subscribe)",
+        r"(?:when\s+can\s+we\s+start|implementation|onboarding|setup)",
+        r"(?:decision\s+maker|approve|budget|timeline|roadmap)"
+    ]
+    
+    for pattern in buying_signal_patterns:
+        if re.search(pattern, user_input_lower):
+            signal = re.search(pattern, user_input_lower).group(0)
+            if signal not in lead_data["buying_signals"]:
+                lead_data["buying_signals"].append(signal)
+                updated = True
+    
     if updated:
+        # Update timestamp
+        lead_data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.session_state.lead_data = lead_data
+        # Calculate lead score after update
+        calculate_lead_score()
 
-def get_openai_response(): # Removed prompt argument, uses session state directly
+def analyze_conversation_with_openai():
+    """Uses OpenAI to analyze the conversation and extract implied information."""
+    # Only run this analysis periodically to save API calls
+    if len(st.session_state.messages) < 3:
+        return
+        
+    try:
+        # Prepare the conversation history
+        conversation = "\n".join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages])
+        
+        # Create the analysis prompt
+        analysis_prompt = f"""
+        Analyze this conversation between a lead and an AI assistant. Extract the following information:
+        
+        Conversation:
+        {conversation}
+        
+        Extract the following (respond in JSON format):
+        1. Implied interests (topics they seem interested in but didn't explicitly state)
+        2. Pain points or challenges they mentioned
+        3. Industry (if mentioned or implied)
+        4. Company size hints (small, medium, enterprise)
+        5. Buying signals (urgency, budget mentions, decision timeline)
+        6. Lead qualification (how likely they are to be a qualified lead)
+        
+        Format your response as valid JSON with these keys: implied_interests, pain_points, industry, company_size, buying_signals, lead_qualification
+        """
+        
+        # Call OpenAI API for analysis
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": analysis_prompt}],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        # Extract and parse the JSON response
+        response_content = completion.choices[0].message.content
+        
+        # Find JSON content (it might be wrapped in ```json or just be plain JSON)
+        json_match = re.search(r'```json\n(.*?)\n```', response_content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Assume the entire response is JSON
+            json_str = response_content
+            
+        try:
+            analysis_result = json.loads(json_str)
+            update_lead_data_from_analysis(analysis_result)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from OpenAI response: {e}")
+            print(f"Response was: {response_content}")
+            
+    except Exception as e:
+        print(f"Error in conversation analysis: {e}")
+
+def update_lead_data_from_analysis(analysis):
+    """Updates lead data based on OpenAI analysis results."""
+    lead_data = st.session_state.lead_data
+    updated = False
+    
+    # Update implied interests if not already set
+    if not lead_data["interest"] and "implied_interests" in analysis and analysis["implied_interests"]:
+        if isinstance(analysis["implied_interests"], list) and analysis["implied_interests"]:
+            lead_data["interest"] = ", ".join(analysis["implied_interests"])
+            st.toast(f"💡 Interest inferred: {lead_data['interest']}")
+            updated = True
+        elif isinstance(analysis["implied_interests"], str) and analysis["implied_interests"].strip():
+            lead_data["interest"] = analysis["implied_interests"].strip()
+            st.toast(f"💡 Interest inferred: {lead_data['interest']}")
+            updated = True
+    
+    # Update industry if not already set
+    if not lead_data["industry"] and "industry" in analysis and analysis["industry"]:
+        lead_data["industry"] = analysis["industry"]
+        st.toast(f"🏭 Industry inferred: {lead_data['industry']}")
+        updated = True
+    
+    # Update pain points
+    if "pain_points" in analysis and analysis["pain_points"]:
+        if isinstance(analysis["pain_points"], list) and analysis["pain_points"]:
+            pain_points = ", ".join(analysis["pain_points"])
+        else:
+            pain_points = analysis["pain_points"]
+            
+        lead_data["pain_points"] = pain_points
+        updated = True
+    
+    # Update buying signals
+    if "buying_signals" in analysis and analysis["buying_signals"]:
+        if isinstance(analysis["buying_signals"], list):
+            for signal in analysis["buying_signals"]:
+                if signal and signal not in lead_data["buying_signals"]:
+                    lead_data["buying_signals"].append(signal)
+                    updated = True
+        elif isinstance(analysis["buying_signals"], str) and analysis["buying_signals"].strip():
+            signal = analysis["buying_signals"].strip()
+            if signal not in lead_data["buying_signals"]:
+                lead_data["buying_signals"].append(signal)
+                updated = True
+    
+    if updated:
+        # Update timestamp
+        lead_data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.lead_data = lead_data
+        # Recalculate lead score
+        calculate_lead_score()
+
+def calculate_lead_score():
+    """Calculates a lead score based on available information and engagement."""
+    lead_data = st.session_state.lead_data
+    score = 0
+    
+    # Basic information completeness (50 points max)
+    if lead_data["name"]:
+        score += 10
+    if lead_data["email"]:
+        score += 15
+    if lead_data["phone"]:
+        score += 10
+    if lead_data["company"]:
+        score += 10
+    if lead_data["industry"]:
+        score += 5
+        
+    # Interest and pain points (20 points max)
+    if lead_data["interest"]:
+        score += 10
+    if lead_data["pain_points"]:
+        score += 10
+        
+    # Buying signals (30 points max)
+    signal_score = min(30, len(lead_data["buying_signals"]) * 10)
+    score += signal_score
+    
+    # Set the lead score
+    lead_data["lead_score"] = score
+    
+    # Determine lead status based on score
+    if score >= 70:
+        lead_data["lead_status"] = "Hot"
+    elif score >= 40:
+        lead_data["lead_status"] = "Warm"
+    else:
+        lead_data["lead_status"] = "Cold"
+        
+    # Update session state
+    st.session_state.lead_data = lead_data
+
+def get_openai_response():
     """Gets a response from OpenAI based on the current conversation history."""
     # Ensure the latest user message is in session state before calling API
     if not st.session_state.messages or st.session_state.messages[-1]["role"] != "user":
-        # This should ideally not happen if called correctly, but safety check
         return "Hmm, I seem to have missed what you just said. Could you please repeat that?"
         
     try:
-        system_prompt = {"role": "system", "content": "You are Lia, a friendly and helpful AI lead generation assistant for LeadPulse. Your goal is to understand the user's needs, collect relevant information (name, email, company, phone, interest) naturally through conversation, and qualify them as a lead. Be conversational and engaging. Ask clarifying questions if needed. Keep responses concise and friendly."}
-        messages_for_api = [system_prompt] + st.session_state.messages # Send the whole history
+        # Create a system prompt that includes lead data status to guide the conversation
+        lead_data = st.session_state.lead_data
+        missing_info = []
         
-        print(f"DEBUG: Sending to OpenAI: {messages_for_api}") # Debug print
-
+        if not lead_data["name"]:
+            missing_info.append("name")
+        if not lead_data["email"]:
+            missing_info.append("email")
+        if not lead_data["phone"]:
+            missing_info.append("phone")
+        if not lead_data["company"]:
+            missing_info.append("company")
+        if not lead_data["interest"]:
+            missing_info.append("interests")
+            
+        # Craft a dynamic system prompt based on what information we still need
+        system_prompt_content = """
+        You are Lia, a friendly and helpful AI lead generation assistant for LeadPulse. Your goal is to understand the user's needs, 
+        collect relevant information naturally through conversation, and qualify them as a lead. Be conversational and engaging.
+        Ask clarifying questions if needed. Keep responses concise and friendly.
+        """
+        
+        # Add guidance based on missing information
+        if missing_info:
+            system_prompt_content += f"\n\nIn this conversation, try to naturally collect the following missing information: {', '.join(missing_info)}. "
+            system_prompt_content += "Don't ask for all at once, but weave questions naturally into the conversation."
+        
+        # Add guidance based on lead status
+        if lead_data["lead_status"] == "Hot":
+            system_prompt_content += "\n\nThis appears to be a HOT lead. Focus on next steps and moving them toward a decision."
+        elif lead_data["lead_status"] == "Warm":
+            system_prompt_content += "\n\nThis appears to be a WARM lead. Focus on understanding their needs better and building interest."
+        
+        system_prompt = {"role": "system", "content": system_prompt_content}
+        messages_for_api = [system_prompt] + st.session_state.messages
+        
+        # Call OpenAI API
         completion = client.chat.completions.create(
             model="gpt-4o",
             messages=messages_for_api,
@@ -154,11 +399,10 @@ def get_openai_response(): # Removed prompt argument, uses session state directl
         )
         response_content = completion.choices[0].message.content
         
-        print(f"DEBUG: Received from OpenAI: {response_content}") # Debug print
         return response_content
 
     except Exception as e:
-        print(f"ERROR: OpenAI API call failed: {e}") # Debug print for error
+        print(f"ERROR: OpenAI API call failed: {e}")
         st.error(f"Error communicating with OpenAI: {e}")
         return "Sorry, I encountered a technical glitch. Please give me a moment and try again."
 
@@ -175,13 +419,21 @@ if prompt := st.chat_input("What can Lia help you with?"):
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Add user message to chat history *first*
+    # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    # Increment message counter
+    st.session_state.message_counter += 1
 
-    # Extract lead info from the latest prompt
-    extract_lead_info(prompt)
+    # Extract lead info using regex
+    extract_lead_info_regex(prompt)
+    
+    # Periodically analyze the conversation with OpenAI
+    # Do this every 3 messages to avoid excessive API calls
+    if st.session_state.message_counter % 3 == 0:
+        analyze_conversation_with_openai()
 
-    # Get response from OpenAI (uses history including the latest prompt)
+    # Get response from OpenAI
     assistant_response = get_openai_response()
 
     # Display assistant response
@@ -194,9 +446,37 @@ if prompt := st.chat_input("What can Lia help you with?"):
     # Rerun to update the chat display smoothly
     st.rerun()
 
-# --- Sidebar for Debugging/Display --- 
-st.sidebar.header("Collected Lead Data")
-st.sidebar.json(st.session_state.lead_data)
+# --- Sidebar for Lead Data Display --- 
+st.sidebar.header("Lead Intelligence")
+
+# Display lead score with color coding
+score = st.session_state.lead_data["lead_score"]
+status = st.session_state.lead_data["lead_status"]
+score_class = f"score-{status.lower()}"
+
+st.sidebar.markdown(f"""
+<div class="lead-score {score_class}">
+    Lead Score: {score}/100<br>
+    Status: {status}
+</div>
+""", unsafe_allow_html=True)
+
+# Display collected lead data
+st.sidebar.subheader("Collected Lead Data")
+lead_display = {
+    "Name": st.session_state.lead_data["name"] or "Not captured",
+    "Email": st.session_state.lead_data["email"] or "Not captured",
+    "Phone": st.session_state.lead_data["phone"] or "Not captured",
+    "Company": st.session_state.lead_data["company"] or "Not captured",
+    "Industry": st.session_state.lead_data["industry"] or "Not captured",
+    "Interest": st.session_state.lead_data["interest"] or "Not captured",
+    "Pain Points": st.session_state.lead_data["pain_points"] or "Not captured",
+    "Buying Signals": ", ".join(st.session_state.lead_data["buying_signals"]) if st.session_state.lead_data["buying_signals"] else "None detected",
+    "Last Updated": st.session_state.lead_data["last_updated"]
+}
+
+for key, value in lead_display.items():
+    st.sidebar.text(f"{key}: {value}")
 
 # --- Footer --- 
 st.markdown("<div class='footer'>Powered by LeadPulse & Manus</div>", unsafe_allow_html=True)
