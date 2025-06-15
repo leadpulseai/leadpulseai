@@ -1,0 +1,63 @@
+{
+  "branding": {"name": "Lia",
+    "logo_url": "⚡",
+    "primary_color": "#3B82F6",
+    "secondary_color": "#1E1E1E",
+    "font_family": "Segoe UI, sans-serif"
+  },
+  "intro": {
+    "enabled": true,
+    "show_once_per_session": true,
+    "animation_speed": "medium"
+  },
+  "welcome_message": "Hi! I'm Lia, your AI assistant from LeadPulse. How can I help you today?",
+  "tone": "friendly",
+  "industry_template": "saas",
+  "intro_description": "An AI assistant that levels up your lead generation.",
+  "supported_languages": [
+    {
+      "code": "en",
+      "display_name": "English"
+    },
+    {
+      "code": "zh",
+      "display_name": "中文"
+    },
+    {
+      "code": "es",
+      "display_name": "Español"
+    }
+  ],
+  "lead_qualification": {
+    "questions": {
+      "budget": "What's your budget range for this project?",
+      "timeline": "When are you looking to get started?",
+      "decision_maker": "Are you the decision maker for this purchase?",
+      "company_size": "How many employees does your company have?",
+      "industry": "What industry is your business in?",
+      "pain_point": "What's your biggest challenge right now?"
+    },
+    "scoring": {
+      "email_provided": 30,
+      "phone_provided": 20,
+      "company_provided": 15,
+      "budget_provided": 15,
+      "timeline_provided": 10,
+      "decision_maker_yes": 10
+    }
+  },
+  "features": {
+    "lead_capture": true,
+    "visitor_engagement": true,
+    "auto_qualification": true,
+    "instant_answers": true,
+    "data_storage": true,
+    "time_saving": true
+  },
+  "admin": {
+    "username": "admin",
+    "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+    "email_notifications": true,
+    "dashboard_enabled": true
+  }
+}
