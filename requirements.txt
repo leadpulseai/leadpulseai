@@ -2,3 +2,5 @@ streamlit>=1.22
 openai
 pandas
 python-dotenv
+plotly
+requests
