@@ -118,7 +118,7 @@ def build_system_prompt(config: Dict, language: str) -> str:
     industry_settings = get_industry_template(industry_template)
     
     # Build dynamic prompt
-    system_prompt = f"""You are {assistant_name}, an AI lead generation assistant for {industry_settings.get(\'business_type\', \'a business\')}. 
+    system_prompt = f"""You are {assistant_name}, an AI lead generation assistant for {industry_settings.get('business_type', 'a business')}. 
 
 PERSONALITY & TONE:
 {tone_settings.get(\'description\', \'Be helpful and professional.\')}
