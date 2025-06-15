@@ -105,7 +105,7 @@ def get_ai_response(messages: List[Dict], language: str = "en") -> str:
         return response.choices[0].message.content
     except Exception as e:
         st.error(f"Error getting AI response: {e}")
-        return get_ui_text("error_response", language, "I apologize, but I'm having trouble responding right now. Please try again.")
+        return get_ui_text("error_response", language, "I apologize, but I\'m having trouble responding right now. Please try again.")
 
 def build_system_prompt(config: Dict, language: str) -> str:
     """Build comprehensive system prompt based on configuration."""
@@ -118,17 +118,17 @@ def build_system_prompt(config: Dict, language: str) -> str:
     industry_settings = get_industry_template(industry_template)
     
     # Build dynamic prompt
-    system_prompt = f"""You are {assistant_name}, an AI lead generation assistant for {industry_settings.get('business_type', 'a business')}. 
+    system_prompt = f"""You are {assistant_name}, an AI lead generation assistant for {industry_settings.get(\'business_type\', \'a business\')}. 
 
 PERSONALITY & TONE:
-{tone_settings.get('description', 'Be helpful and professional.')}
-- Communication style: {tone_settings.get('style', 'Professional and friendly')}
+{tone_settings.get(\'description\', \'Be helpful and professional.\')}
+- Communication style: {tone_settings.get(\'style\', \'Professional and friendly\')}
 - Use language: {language}
 
 BUSINESS CONTEXT:
-- Industry: {industry_settings.get('name', 'General Business')}
-- Target audience: {industry_settings.get('target_audience', 'Business professionals')}
-- Key value propositions: {', '.join(industry_settings.get('value_props', ['Quality service', 'Expert solutions']))}
+- Industry: {industry_settings.get(\'name\', \'General Business\')}
+- Target audience: {industry_settings.get(\'target_audience\', \'Business professionals\')}
+- Key value propositions: {\', \'.join(industry_settings.get(\'value_props\', [\'Quality service\', \'Expert solutions\']))}
 
 LEAD QUALIFICATION GOALS:
 Your primary objective is to naturally extract the following information through conversation:
@@ -145,7 +145,7 @@ CONVERSATION GUIDELINES:
 - Ask open-ended questions to understand their needs
 - Provide value and insights related to their interests
 - Gradually and naturally request contact information
-- Be helpful even if they don't provide all information
+- Be helpful even if they don\'t provide all information
 - If they ask about pricing, gather their requirements first
 - Always maintain a {tone} tone throughout the conversation
 
@@ -168,9 +168,9 @@ def extract_and_save_lead_info(conversation_history: List[Dict], session_id: str
     if lead_info and any(lead_info.values()):
         # Calculate lead score
         score = calculate_lead_score(lead_info)
-        lead_info['score'] = score
-        lead_info['priority'] = get_lead_priority(score)
-        lead_info['language'] = language
+        lead_info[\'score\'] = score
+        lead_info[\'priority\'] = get_lead_priority(score)
+        lead_info[\'language\'] = language
         
         # Save to database
         lead_id = session_manager.save_lead_data(session_id, lead_info)
@@ -179,16 +179,16 @@ def extract_and_save_lead_info(conversation_history: List[Dict], session_id: str
         st.session_state.lead_data.update(lead_info)
         
         # Trigger integrations if configured
-        if any(crm_manager._is_integration_enabled(integration) for integration in ['hubspot', 'salesforce', 'airtable', 'notion']):
+        if any(crm_manager._is_integration_enabled(integration) for integration in [\'hubspot\', \'salesforce\', \'airtable\', \'notion\']):
             sync_results = crm_manager.sync_lead_to_integrations(lead_info, session_id)
             
         # Send notifications if configured
-        if any(crm_manager._is_integration_enabled(integration) for integration in ['slack', 'discord', 'webhook']):
+        if any(crm_manager._is_integration_enabled(integration) for integration in [\'slack\', \'discord\', \'webhook\']):
             notification_results = crm_manager.send_lead_notification(lead_info, session_id)
         
         # Send email notification if configured
-        if email_manager.smtp_config.get('username') and st.session_state.config.get('admin', {}).get('email_notifications', False):
-            admin_email = st.session_state.config.get('admin', {}).get('email', '')
+        if email_manager.smtp_config.get(\'username\') and st.session_state.config.get(\'admin\', {}).get(\'email_notifications\', False):
+            admin_email = st.session_state.config.get(\'admin\', {}).get(\'email\', \'\')
             if admin_email:
                 email_manager.send_new_lead_notification(lead_info, [admin_email], language)
         
@@ -199,28 +199,28 @@ def extract_and_save_lead_info(conversation_history: List[Dict], session_id: str
 def calculate_lead_score(lead_info: Dict) -> int:
     """Calculate lead score based on available information."""
     config = st.session_state.config
-    scoring = config.get('lead_qualification', {}).get('scoring', {})
+    scoring = config.get(\'lead_qualification\', {}).get(\'scoring\', {})
     
     score = 0
     
     # Apply scoring rules
-    if lead_info.get('email'):
-        score += scoring.get('email_provided', 30)
+    if lead_info.get(\'email\'):
+        score += scoring.get(\'email_provided\', 30)
     
-    if lead_info.get('phone'):
-        score += scoring.get('phone_provided', 20)
+    if lead_info.get(\'phone\'):
+        score += scoring.get(\'phone_provided\', 20)
     
-    if lead_info.get('company'):
-        score += scoring.get('company_provided', 15)
+    if lead_info.get(\'company\'):
+        score += scoring.get(\'company_provided\', 15)
     
-    if lead_info.get('budget'):
-        score += scoring.get('budget_provided', 15)
+    if lead_info.get(\'budget\'):
+        score += scoring.get(\'budget_provided\', 15)
     
-    if lead_info.get('timeline'):
-        score += scoring.get('timeline_provided', 10)
+    if lead_info.get(\'timeline\'):
+        score += scoring.get(\'timeline_provided\', 10)
     
     # Additional scoring based on conversation quality
-    if lead_info.get('interest') and len(lead_info.get('interest', '')) > 20:
+    if lead_info.get(\'interest\') and len(lead_info.get(\'interest\', \'\')) > 20:
         score += 10  # Detailed interest
     
     return min(score, 100)  # Cap at 100
@@ -260,29 +260,29 @@ def render_sidebar():
         
         # Current lead information
         st.subheader("📋 Current Lead")
-        lead_data = st.session_state.get('lead_data', {})
+        lead_data = st.session_state.get(\'lead_data\', {})
         
         if any(lead_data.values()):
             # Display lead info
-            if lead_data.get('name'):
-                st.write(f"**Name:** {lead_data['name']}")
-            if lead_data.get('email'):
-                st.write(f"**Email:** {lead_data['email']}")
-            if lead_data.get('company'):
-                st.write(f"**Company:** {lead_data['company']}")
-            if lead_data.get('phone'):
-                st.write(f"**Phone:** {lead_data['phone']}")
+            if lead_data.get(\'name\'):
+                st.write(f"**Name:** {lead_data[\'name\']}")
+            if lead_data.get(\'email\'):
+                st.write(f"**Email:** {lead_data[\'email\']}")
+            if lead_data.get(\'company\'):
+                st.write(f"**Company:** {lead_data[\'company\']}")
+            if lead_data.get(\'phone\'):
+                st.write(f"**Phone:** {lead_data[\'phone\']}")
             
             # Lead score and priority
-            score = lead_data.get('score', 0)
-            priority = lead_data.get('priority', 'low')
+            score = lead_data.get(\'score\', 0)
+            priority = lead_data.get(\'priority\', \'low\')
             
             col1, col2 = st.columns(2)
             with col1:
                 st.metric("Score", f"{score}/100")
             with col2:
                 priority_color = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-                st.write(f"**Priority:** {priority_color.get(priority, '⚪')} {priority.title()}")
+                st.write(f"**Priority:** {priority_color.get(priority, \'⚪\')} {priority.title()}")
         else:
             st.info("No lead information captured yet.")
         
@@ -294,22 +294,25 @@ def render_sidebar():
         
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Leads (7d)", analytics['total_leads'])
+            st.metric("Leads (7d)", analytics[\'total_leads\'])
         with col2:
-            st.metric("Avg Score", f"{analytics['average_score']:.1f}")
+            st.metric("Avg Score", f"{analytics[\'average_score\']:.1f}")
         
         # Language selector
         st.divider()
         st.subheader("🌍 Language")
         
         languages = get_supported_languages()
-        current_lang = st.session_state.get('language', 'en')
+        current_lang = st.session_state.get(\'language\', \'en\')
         
+        # FIX: Changed st.write to st.markdown for f-string with markdown
+        st.markdown(f"**{get_ui_text(\'language\', current_lang, \'Language\')}:** {current_lang.upper()}")
+
         selected_lang = st.selectbox(
             "Select Language",
-            options=[lang['code'] for lang in languages],
-            format_func=lambda x: next(lang['display_name'] for lang in languages if lang['code'] == x),
-            index=[lang['code'] for lang in languages].index(current_lang)
+            options=[lang[\'code\'] for lang in languages],
+            format_func=lambda x: next(lang[\'display_name\'] for lang in languages if lang[\'code\'] == x),
+            index=[lang[\'code\'] for lang in languages].index(current_lang)
         )
         
         if selected_lang != current_lang:
@@ -318,12 +321,12 @@ def render_sidebar():
 
 def render_chat_interface():
     """Render the main chat interface."""
-    language = st.session_state.get('language', 'en')
+    language = st.session_state.get(\'language\', \'en\')
     
     # Chat header
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title(f"⚡ {st.session_state.config.get('branding', {}).get('name', 'Lia')}")
+        st.title(f"⚡ {st.session_state.config.get(\'branding\', {}).get(\'name\', \'Lia\')}")
         st.caption(get_ui_text("chat_subtitle", language, "AI Lead Generation Assistant"))
     
     # Chat messages container
@@ -332,8 +335,8 @@ def render_chat_interface():
     with chat_container:
         # Display conversation history
         for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
+            with st.chat_message(message[\'role\']):
+                st.write(message[\'content\'])
     
     # Chat input
     if prompt := st.chat_input(get_ui_text("chat_placeholder", language, "Type your message here...")):
@@ -385,12 +388,12 @@ def render_chat_interface():
 
 def render_dashboard_page():
     """Render the advanced dashboard page."""
-    language = st.session_state.get('language', 'en')
+    language = st.session_state.get(\'language\', \'en\')
     dashboard.render_dashboard(language)
 
 def render_settings_page():
     """Render the settings and customization page."""
-    language = st.session_state.get('language', 'en')
+    language = st.session_state.get(\'language\', \'en\')
     
     st.title(get_ui_text("settings_title", language, "⚙️ Settings & Customization"))
     
@@ -420,12 +423,12 @@ def render_email_settings(language: str):
         with col1:
             smtp_server = st.text_input(
                 get_ui_text("smtp_server", language, "SMTP Server"),
-                value=email_manager.smtp_config.get('smtp_server', 'smtp.gmail.com')
+                value=email_manager.smtp_config.get(\'smtp_server\', \'smtp.gmail.com\')
             )
             
             smtp_port = st.number_input(
                 get_ui_text("smtp_port", language, "SMTP Port"),
-                value=email_manager.smtp_config.get('smtp_port', 587),
+                value=email_manager.smtp_config.get(\'smtp_port\', 587),
                 min_value=1,
                 max_value=65535
             )
@@ -433,24 +436,24 @@ def render_email_settings(language: str):
         with col2:
             username = st.text_input(
                 get_ui_text("email_username", language, "Email Username"),
-                value=email_manager.smtp_config.get('username', '')
+                value=email_manager.smtp_config.get(\'username\', \'\')
             )
             
             password = st.text_input(
                 get_ui_text("email_password", language, "Email Password"),
                 type="password",
-                value=email_manager.smtp_config.get('password', '')
+                value=email_manager.smtp_config.get(\'password\', \'\')
             )
         
         from_email = st.text_input(
-            get_ui_text("from_email", language, "From Email"),
-            value=email_manager.smtp_config.get('from_email', '')
-        )
-        
+                get_ui_text("from_email", language, "From Email"),
+                value=email_manager.smtp_config.get(\'from_email\', \'\')
+            )
+            
         from_name = st.text_input(
-            get_ui_text("from_name", language, "From Name"),
-            value=email_manager.smtp_config.get('from_name', 'Lia - LeadPulse')
-        )
+                get_ui_text("from_name", language, "From Name"),
+                value=email_manager.smtp_config.get(\'from_name\', \'Lia - LeadPulse\')
+            )
         
         col1, col2 = st.columns(2)
         
@@ -478,21 +481,21 @@ def render_email_settings(language: str):
     
     enable_notifications = st.checkbox(
         get_ui_text("enable_email_notifications", language, "Enable email notifications for new leads"),
-        value=st.session_state.config.get('admin', {}).get('email_notifications', False)
+        value=st.session_state.config.get(\'admin\', {}).get(\'email_notifications\', False)
     )
     
     admin_email = st.text_input(
         get_ui_text("admin_email", language, "Admin Email for Notifications"),
-        value=st.session_state.config.get('admin', {}).get('email', '')
+        value=st.session_state.config.get(\'admin\', {}).get(\'email\', \'\')
     )
     
     if st.button(get_ui_text("save_notification_settings", language, "💾 Save Notification Settings")):
         config = st.session_state.config
-        if 'admin' not in config:
-            config['admin'] = {}
+        if \'admin\' not in config:
+            config[\'admin\'] = {}
         
-        config['admin']['email_notifications'] = enable_notifications
-        config['admin']['email'] = admin_email
+        config[\'admin\'][\'email_notifications\'] = enable_notifications
+        config[\'admin\'][\'email\'] = admin_email
         
         save_config(config)
         st.session_state.config = config
@@ -518,13 +521,3 @@ def render_admin_settings(language: str):
         
         with col3:
             if st.button(get_ui_text("reset_analytics", language, "🔄 Reset Analytics")):
-                st.warning(get_ui_text("reset_warning", language, "This action cannot be undone!"))
-    
-    # System information
-    st.subheader(get_ui_text("system_info", language, "ℹ️ System Information"))
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write(f"**{get_ui_text('session_id', language, 'Session ID')}:** {st.session_state.session_id[:8]}...")
-        st.write(f"**{get_ui_text('language', language, 'Language')}
