@@ -511,4 +511,84 @@ class DiscordIntegration(BaseIntegration):
                 'title': '🚀 New Lead Captured!',
                 'color': 0x3B82F6,
                 'fields': [
-                    {'name': 'Name', 'value': lead_data.get('name
+                    {'name': 'Name', 'value': lead_data.get('name', 'N/A'), 'inline': True},
+                    {'name': 'Email', 'value': lead_data.get('email', 'N/A'), 'inline': True},
+                    {'name': 'Company', 'value': lead_data.get('company', 'N/A'), 'inline': True},
+                    {'name': 'Priority', 'value': lead_data.get('priority', 'low').title(), 'inline': True},
+                    {'name': 'Score', 'value': f"{lead_data.get('score', 0)}/100", 'inline': True},
+                    {'name': 'Interest', 'value': lead_data.get('interest', 'N/A'), 'inline': False}
+                ],
+                'footer': {'text': 'Lia AI Assistant'},
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            message = {'embeds': [embed]}
+            
+            response = requests.post(
+                self.config['webhook_url'],
+                json=message
+            )
+            
+            return response.status_code == 204
+        except Exception as e:
+            logging.error(f"Failed to send Discord notification: {e}")
+            return False
+
+class WebhookIntegration(BaseIntegration):
+    """Custom webhook integration."""
+    
+    def configure(self, config: Dict) -> bool:
+        """Configure webhook integration."""
+        required_fields = ['webhook_url']
+        if all(field in config for field in required_fields):
+            self.config = config
+            self.is_configured = True
+            return True
+        return False
+    
+    def sync_lead(self, lead_data: Dict) -> bool:
+        """Send lead data to webhook."""
+        return self.send_notification(lead_data)
+    
+    def send_notification(self, lead_data: Dict) -> bool:
+        """Send lead data to custom webhook."""
+        if not self.is_configured:
+            return False
+        
+        try:
+            # Prepare webhook payload
+            payload = {
+                'event': 'new_lead',
+                'timestamp': datetime.now().isoformat(),
+                'source': 'lia_ai_assistant',
+                'data': lead_data
+            }
+            
+            headers = {'Content-Type': 'application/json'}
+            
+            # Add custom headers if configured
+            if 'headers' in self.config:
+                headers.update(self.config['headers'])
+            
+            response = requests.post(
+                self.config['webhook_url'],
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
+            
+            return response.status_code in [200, 201, 202]
+        except Exception as e:
+            logging.error(f"Failed to send webhook notification: {e}")
+            return False
+
+# Singleton instance
+_crm_manager = None
+
+def get_crm_manager() -> CRMIntegrationManager:
+    """Get the CRM integration manager singleton instance."""
+    global _crm_manager
+    if _crm_manager is None:
+        _crm_manager = CRMIntegrationManager()
+    return _crm_manager
+

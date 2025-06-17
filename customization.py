@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
         "show_once_per_session": True,
         "animation_speed": "medium"
     },
-    "welcome_message": "Hi! I'm Lia, your AI assistant from LeadPulse. How can I help you today?",
+    "welcome_message": "Hi! I\'m Lia, your AI assistant from LeadPulse. How can I help you today?",
     "tone": "professional",  # Options: professional, friendly, casual
     "industry_template": "saas",  # Options: saas, b2b, marketing, general
     "intro_description": "An AI assistant that levels up your lead generation.",
@@ -29,12 +29,12 @@ DEFAULT_CONFIG = {
     ],
     "lead_qualification": {
         "questions": {
-            "budget": "What's your budget range for this project?",
+            "budget": "What\'s your budget range for this project?",
             "timeline": "When are you looking to get started?",
             "decision_maker": "Are you the decision maker for this purchase?",
             "company_size": "How many employees does your company have?",
             "industry": "What industry is your business in?",
-            "pain_point": "What's your biggest challenge right now?"
+            "pain_point": "What\'s your biggest challenge right now?"
         },
         "scoring": {
             "email_provided": 30,
@@ -106,7 +106,7 @@ def get_industry_templates():
             "questions": [
                 "What type of software solution are you looking for?",
                 "How many users would need access?",
-                "What's your current tech stack?",
+                "What\'s your current tech stack?",
                 "When do you need to implement this solution?"
             ]
         },
@@ -116,9 +116,9 @@ def get_industry_templates():
             "tone": "professional",
             "questions": [
                 "What services are you interested in?",
-                "What's the size of your company?",
-                "What's your timeline for this project?",
-                "What's your budget range?"
+                "What\'s the size of your company?",
+                "What\'s your timeline for this project?",
+                "What\'s your budget range?"
             ]
         },
         "marketing": {
@@ -127,7 +127,7 @@ def get_industry_templates():
             "tone": "friendly",
             "questions": [
                 "What marketing challenges are you facing?",
-                "What's your current marketing budget?",
+                "What\'s your current marketing budget?",
                 "Which channels are you currently using?",
                 "What are your growth goals?"
             ]
@@ -139,7 +139,7 @@ def get_industry_templates():
             "questions": [
                 "What products are you interested in?",
                 "Are you shopping for personal or business use?",
-                "What's your budget range?",
+                "What\'s your budget range?",
                 "When do you need this delivered?"
             ]
         },
@@ -149,8 +149,8 @@ def get_industry_templates():
             "tone": "professional",
             "questions": [
                 "What type of consulting do you need?",
-                "What's the scope of your project?",
-                "What's your timeline?",
+                "What\'s the scope of your project?",
+                "What\'s your timeline?",
                 "Have you worked with consultants before?"
             ]
         },
@@ -160,9 +160,9 @@ def get_industry_templates():
             "tone": "friendly",
             "questions": [
                 "How can we help you today?",
-                "What's your main goal?",
-                "What's your timeline?",
-                "What's your budget range?"
+                "What\'s your main goal?",
+                "What\'s your timeline?",
+                "What\'s your budget range?"
             ]
         }
     }
@@ -173,21 +173,21 @@ def get_tone_settings():
         "professional": {
             "name": "Professional",
             "description": "Formal, business-focused communication",
-            "sample": "Good day! I'm here to assist you with your business needs. How may I help you today?"
+            "sample": "Good day! I\'m here to assist you with your business needs. How may I help you today?"
         },
         "friendly": {
             "name": "Friendly",
             "description": "Warm, approachable, and conversational",
-            "sample": "Hi there! I'm Lia, and I'm excited to help you out. What can I do for you today?"
+            "sample": "Hi there! I\'m Lia, and I\'m excited to help you out. What can I do for you today?"
         },
         "casual": {
             "name": "Casual",
             "description": "Relaxed, informal, and easy-going",
-            "sample": "Hey! I'm Lia. What's up? How can I help you out?"
+            "sample": "Hey! I\'m Lia. What\'s up? How can I help you out?"
         }
     }
 
-def render_customization_settings():
+def render_customization_dashboard(language: str):
     """Render the customization settings in the admin dashboard."""
     st.header("🎨 Customization & Branding")
     
@@ -266,13 +266,13 @@ def render_customization_settings():
         selected_tone = st.selectbox(
             "Conversation Tone",
             options=list(tone_options.keys()),
-            format_func=lambda x: f"{tone_options[x]['name']} - {tone_options[x]['description']}",
+            format_func=lambda x: f"{tone_options[x][\'name\']} - {tone_options[x][\'description\]}",
             index=list(tone_options.keys()).index(config["tone"])
         )
         config["tone"] = selected_tone
         
         # Show sample message for selected tone
-        st.info(f"Sample message: {tone_options[selected_tone]['sample']}")
+        st.info(f"Sample message: {tone_options[selected_tone][\'sample\]}")
     
     # Industry Template Settings
     with st.expander("🏢 Industry Template"):
@@ -280,14 +280,14 @@ def render_customization_settings():
         selected_industry = st.selectbox(
             "Industry Template",
             options=list(industry_options.keys()),
-            format_func=lambda x: f"{industry_options[x]['name']} - {industry_options[x]['description']}",
+            format_func=lambda x: f"{industry_options[x][\'name\']} - {industry_options[x][\'description\]}",
             index=list(industry_options.keys()).index(config["industry_template"])
         )
         config["industry_template"] = selected_industry
         
         # Show template details
         template = industry_options[selected_industry]
-        st.info(f"Template: {template['name']}")
+        st.info(f"Template: {template[\'name\]}")
         st.write("**Sample Questions:**")
         for question in template["questions"]:
             st.write(f"• {question}")
@@ -298,7 +298,7 @@ def render_customization_settings():
         
         for key, question in config["lead_qualification"]["questions"].items():
             config["lead_qualification"]["questions"][key] = st.text_input(
-                f"{key.replace('_', ' ').title()} Question",
+                f"{key.replace(\'_\', \' \').title()} Question",
                 question
             )
         
@@ -307,7 +307,7 @@ def render_customization_settings():
         
         for key, score in config["lead_qualification"]["scoring"].items():
             config["lead_qualification"]["scoring"][key] = st.number_input(
-                f"{key.replace('_', ' ').title()}",
+                f"{key.replace(\'_\', \' \').title()}",
                 min_value=0,
                 max_value=50,
                 value=score,
@@ -380,13 +380,13 @@ def get_system_prompt(industry: str, tone: str, language: str = "en") -> str:
     prompt = f"""You are Lia, an AI lead generation assistant for LeadPulse. 
 
 PERSONALITY & TONE:
-- Use a {tone_info['name'].lower()} tone: {tone_info['description']}
+- Use a {tone_info[\'name\'].lower()} tone: {tone_info[\'description\]}
 - Be conversational and engaging
 - Keep responses concise but helpful
 
 INDUSTRY FOCUS:
-- You specialize in {industry_info['name']}
-- {industry_info['description']}
+- You specialize in {industry_info[\'name\]}
+- {industry_info[\'description\]}
 
 PRIMARY GOALS:
 1. Engage visitors in natural conversation
@@ -397,13 +397,13 @@ PRIMARY GOALS:
 
 LEAD COLLECTION STRATEGY:
 - Ask for information naturally within conversation flow
-- Don't be pushy - build rapport first
+- Don\'t be pushy - build rapport first
 - Use the conversation context to ask relevant questions
 - Celebrate when users provide information
 
 LANGUAGE:
 - Respond in {language} language
-- Adapt your communication style to the user's language and tone
+- Adapt your communication style to the user\'s language and tone
 
 CONVERSATION FLOW:
 1. Greet warmly and ask how you can help
@@ -412,56 +412,11 @@ CONVERSATION FLOW:
 4. Qualify their interest level and timeline
 5. Suggest next steps or offer to connect them with a human
 
-Remember: You're not just collecting data - you're building relationships and providing value."""
+Remember: You\'re not just collecting data - you\'re building relationships and providing value."""
     
     return prompt
 
 def apply_custom_styling(config: Dict) -> str:
-    """Generate custom CSS based on configuration."""
-    return f"""
-    <style>
-    :root {{
-        --primary-color: {config['branding']['primary_color']};
-        --secondary-color: {config['branding']['secondary_color']};
-        --font-family: {config['branding']['font_family']};
-    }}
-    
-    .stApp {{
-        font-family: var(--font-family);
-    }}
-    
-    .stChatMessage[data-testid="chatAvatarIcon-user"] + div {{
-        background-color: var(--primary-color);
-        color: white;
-        border-radius: 15px;
-    }}
-    
-    .stChatMessage[data-testid="chatAvatarIcon-assistant"] + div {{
-        background-color: #f8f9fa;
-        color: #333;
-        border-radius: 15px;
-    }}
-    
-    .stButton > button {{
-        background-color: var(--primary-color);
-        color: white;
-        border-radius: 20px;
-        border: none;
-        font-weight: 600;
-    }}
-    
-    .stButton > button:hover {{
-        background-color: var(--primary-color);
-        opacity: 0.8;
-    }}
-    
-    .lead-info-card {{
-        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-    }}
-    </style>
-    """
+    """Generate custom CSS based on config
+(Content truncated due to size limit. Use line ranges to read in chunks)
 

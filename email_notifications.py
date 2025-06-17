@@ -398,4 +398,62 @@ class EmailNotificationManager:
     
     def _generate_daily_summary_email_body(self, analytics: Dict, recent_leads: List[Dict], 
                                           language: str) -> str:
-        """Generate HTML email body
+        """Generate HTML email body for daily summary."""
+        # Simplified version - would be expanded with full templates
+        return f"""
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <h2>Daily Lead Summary</h2>
+            <p><strong>Total leads today:</strong> {analytics['total_leads']}</p>
+            <p><strong>Average score:</strong> {analytics['average_score']}</p>
+            <h3>Recent Leads:</h3>
+            <ul>
+                {''.join([f"<li>{lead.get('name', 'Unknown')} - {lead.get('company', 'Unknown')}</li>" for lead in recent_leads[:5]])}
+            </ul>
+        </body>
+        </html>
+        """
+    
+    def _generate_weekly_report_email_body(self, analytics: Dict, top_leads: List[Dict], 
+                                          language: str) -> str:
+        """Generate HTML email body for weekly report."""
+        # Simplified version - would be expanded with full templates
+        return f"""
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <h2>Weekly Lead Report</h2>
+            <p><strong>Total leads this week:</strong> {analytics['total_leads']}</p>
+            <p><strong>High priority leads:</strong> {len(top_leads)}</p>
+            <h3>Top Leads:</h3>
+            <ul>
+                {''.join([f"<li>{lead.get('name', 'Unknown')} - Score: {lead.get('score', 0)}</li>" for lead in top_leads[:10]])}
+            </ul>
+        </body>
+        </html>
+        """
+    
+    def _generate_follow_up_reminder_email_body(self, lead_data: Dict, language: str) -> str:
+        """Generate HTML email body for follow-up reminder."""
+        # Simplified version - would be expanded with full templates
+        return f"""
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+            <h2>Follow-up Reminder</h2>
+            <p><strong>Lead:</strong> {lead_data.get('name', 'Unknown')}</p>
+            <p><strong>Company:</strong> {lead_data.get('company', 'Unknown')}</p>
+            <p><strong>Email:</strong> {lead_data.get('email', 'Unknown')}</p>
+            <p>This lead requires follow-up attention.</p>
+        </body>
+        </html>
+        """
+
+# Singleton instance
+_email_manager = None
+
+def get_email_manager() -> EmailNotificationManager:
+    """Get the email manager singleton instance."""
+    global _email_manager
+    if _email_manager is None:
+        _email_manager = EmailNotificationManager()
+    return _email_manager
+

@@ -448,3 +448,27 @@ class AdvancedDashboard:
         return 0.0
     
     def _bulk_update_status(self, leads: List[Dict], status: str):
+        """Bulk update lead status."""
+        for lead in leads:
+            self.db.update_lead_status(lead['id'], status)
+    
+    def _export_leads_to_csv(self, leads: List[Dict]) -> str:
+        """Export leads to CSV format."""
+        df = pd.DataFrame(leads)
+        return df.to_csv(index=False)
+    
+    def _handle_export(self, data_type: str, format_type: str, period, language: str):
+        """Handle data export."""
+        st.info(get_ui_text("export_processing", language, f"Exporting {data_type} in {format_type} format..."))
+        # Implementation would depend on the specific export requirements
+
+# Singleton instance
+_dashboard = None
+
+def get_dashboard() -> AdvancedDashboard:
+    """Get the dashboard singleton instance."""
+    global _dashboard
+    if _dashboard is None:
+        _dashboard = AdvancedDashboard()
+    return _dashboard
+
