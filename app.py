@@ -527,4 +527,249 @@ def render_admin_settings(language: str):
     
     with col1:
         st.markdown(f"**{get_ui_text("session_id", language, "Session ID")}:** {st.session_state.session_id[:8]}...")
-        st.markdown(f"**{get_ui_text
+        st.markdown(f"**{get_ui_text("language", language, "Language")}:** {language}")
+        st.markdown(f"**{get_ui_text("messages_count", language, "Messages")}:** {len(st.session_state.messages)}")
+    
+    with col2:
+        analytics = db_manager.get_analytics_summary(days=1)
+        st.markdown(f"**{get_ui_text("todays_leads", language, "Today\"s Leads")}:** {analytics["total_leads"]}")
+        st.markdown(f"**{get_ui_text("avg_score", language, "Avg Score")}:** {analytics["average_score"]:.1f}")
+
+def render_integrations_page():
+    """Render the integrations configuration page."""
+    language = st.session_state.get("language", "en")
+    
+    st.title(get_ui_text("integrations_title", language, "🔗 Integrations"))
+    
+    # Get available integrations
+    integrations = crm_manager.get_available_integrations()
+    
+    # Group integrations by category
+    categories = {}
+    for integration in integrations:
+        category = integration["category"]
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(integration)
+    
+    # Render integration categories
+    for category, category_integrations in categories.items():
+        st.subheader(f"{category} Integrations")
+        
+        for integration in category_integrations:
+            with st.expander(f"{integration["icon"]} {integration["name"]}", expanded=False):
+                st.write(integration["description"])
+                
+                status = integration["status"]
+                status_colors = {
+                    "enabled": "🟢",
+                    "configured": "🟡", 
+                    "disabled": "🔴"
+                }
+                
+                st.write(f"**Status:** {status_colors.get(status, "⚪")} {status.title()}")
+                
+                # Configuration form based on integration type
+                if integration["id"] == "hubspot":
+                    render_hubspot_config(integration["id"], language)
+                elif integration["id"] == "slack":
+                    render_slack_config(integration["id"], language)
+                elif integration["id"] == "webhook":
+                    render_webhook_config(integration["id"], language)
+                # Add more integration configs as needed
+
+def render_hubspot_config(integration_id: str, language: str):
+    """Render HubSpot configuration form."""
+    st.write("**Configuration:**")
+    
+    api_key = st.text_input(
+        "HubSpot API Key",
+        type="password",
+        key=f"{integration_id}_api_key"
+    )
+    
+    portal_id = st.text_input(
+        "Portal ID",
+        key=f"{integration_id}_portal_id"
+    )
+    
+    enabled = st.checkbox(
+        "Enable Integration",
+        key=f"{integration_id}_enabled"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Save Configuration", key=f"{integration_id}_save"):
+            config = {
+                "api_key": api_key,
+                "portal_id": portal_id,
+                "enabled": enabled
+            }
+            
+            if crm_manager.configure_integration(integration_id, config):
+                st.success("Configuration saved!")
+            else:
+                st.error("Failed to save configuration!")
+    
+    with col2:
+        if st.button("Test Connection", key=f"{integration_id}_test"):
+            if crm_manager.test_integration(integration_id):
+                st.success("✅ Connection successful!")
+            else:
+                st.error("❌ Connection failed!")
+
+def render_slack_config(integration_id: str, language: str):
+    """Render Slack configuration form."""
+    st.write("**Configuration:**")
+    
+    webhook_url = st.text_input(
+        "Slack Webhook URL",
+        type="password",
+        key=f"{integration_id}_webhook"
+    )
+    
+    enabled = st.checkbox(
+        "Enable Integration",
+        key=f"{integration_id}_enabled"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Save Configuration", key=f"{integration_id}_save"):
+            config = {
+                "webhook_url": webhook_url,
+                "enabled": enabled
+            }
+            
+            if crm_manager.configure_integration(integration_id, config):
+                st.success("Configuration saved!")
+            else:
+                st.error("Failed to save configuration!")
+    
+    with col2:
+        if st.button("Test Connection", key=f"{integration_id}_test"):
+            if crm_manager.test_integration(integration_id):
+                st.success("✅ Connection successful!")
+            else:
+                st.error("❌ Connection failed!")
+
+def render_webhook_config(integration_id: str, language: str):
+    """Render webhook configuration form."""
+    st.write("**Configuration:**")
+    
+    webhook_url = st.text_input(
+        "Webhook URL",
+        key=f"{integration_id}_webhook"
+    )
+    
+    headers = st.text_area(
+        "Custom Headers (JSON format)",
+        placeholder="{\"Authorization\": \"Bearer token\", \"Content-Type\": \"application/json\"}",
+        key=f"{integration_id}_headers"
+    )
+    
+    enabled = st.checkbox(
+        "Enable Integration",
+        key=f"{integration_id}_enabled"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Save Configuration", key=f"{integration_id}_save"):
+            config = {
+                "webhook_url": webhook_url,
+                "enabled": enabled
+            }
+            
+            if headers:
+                try:
+                    config["headers"] = json.loads(headers)
+                except json.JSONDecodeError:
+                    st.error("Invalid JSON format for headers!")
+                    return
+            
+            if crm_manager.configure_integration(integration_id, config):
+                st.success("Configuration saved!")
+            else:
+                st.error("Failed to save configuration!")
+    
+    with col2:
+        if st.button("Test Connection", key=f"{integration_id}_test"):
+            if crm_manager.test_integration(integration_id):
+                st.success("✅ Connection successful!")
+            else:
+                st.error("❌ Connection failed!")
+
+def check_admin_access():
+    """Check if user has admin access."""
+    # Check URL parameters for admin access
+    query_params = st.experimental_get_query_params()
+    
+    if "admin" in query_params and not st.session_state.admin_authenticated:
+        st.title("🔐 Admin Login")
+        
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            # Simple authentication (in production, use proper authentication)
+            config = st.session_state.config
+            admin_config = config.get("admin", {})
+            
+            if (username == admin_config.get("username", "admin") and 
+                hashlib.sha256(password.encode()).hexdigest() == admin_config.get("password_hash", 
+                "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9")):  # admin123
+                st.session_state.admin_authenticated = True
+                st.success("Login successful!")
+                st.rerun()
+            else:
+                st.error("Invalid credentials!")
+        
+        st.stop()
+    
+    return "admin" in query_params and st.session_state.admin_authenticated
+
+def main():
+    """Main application function."""
+    # Initialize session state
+    session_id = initialize_session_state()
+    
+    # Check for admin access
+    is_admin = check_admin_access()
+    
+    # Show intro page if configured
+    if st.session_state.show_intro and not is_admin:
+        render_intro_page()
+        return
+    
+    # Render sidebar
+    render_sidebar()
+    
+    # Render main content based on current page
+    current_page = st.session_state.current_page
+    
+    if current_page == "chat":
+        render_chat_interface()
+    elif current_page == "dashboard":
+        render_dashboard_page()
+    elif current_page == "settings":
+        render_settings_page()
+    elif current_page == "integrations":
+        render_integrations_page()
+    
+    # Add footer
+    st.markdown("---")
+    st.markdown(
+        f"<div style=\"text-align: center; color: #666; font-size: 12px;\">"
+        f"Powered by Lia AI Assistant | LeadPulse Platform | Session: {session_id[:8]}..."
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+if __name__ == "__main__":
+    main()
+
