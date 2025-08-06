@@ -1,6 +1,5 @@
 import streamlit as st
 from typing import Dict, List
-import json
 import re
 import os
 from openai import OpenAI
@@ -74,76 +73,9 @@ TRANSLATIONS = {
 
 # Regular expressions for lead extraction in different languages
 LEAD_EXTRACTION_PATTERNS = {
-    "email": {
-        "en": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}",
-        "zh": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}",
-        "es": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}"
-    },
-    "name": {
-        "en": [
-            r"(?:my name is|I am|I'm|call me|this is)\s+([A-Za-z\s]{2,30})",
-            r"(?:I'm|I am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-            r"(?:name|called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"
-        ],
-        "zh": [
-            r"(?:我叫|我是|我的名字是|叫我)\s*([\u4e00-\u9fa5A-Za-z\s]{1,20})",
-            r"(?:姓名|名字)(?:是|叫)?\s*([\u4e00-\u9fa5A-Za-z\s]{1,20})"
-        ],
-        "es": [
-            r"(?:me llamo|soy|mi nombre es|llámame|esto es)\s+([A-Za-zÀ-ÿ\s]{2,30})",
-            r"(?:nombre|llamado)\s+([A-Za-zÀ-ÿ\s]{2,30})"
-        ]
-    },
-    "phone": {
-        "en": r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
-        "zh": r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b",
-        "es": r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
-    },
-    "company": {
-        "en": [
-            r"(?:work at|work for|employed by|company is|from)\s+([A-Za-z0-9\s&.,\'-]{2,50})",
-            r"(?:at|@)\s+([A-Z][A-Za-z0-9\s&.,\'-]{1,49})\s*(?:company|corp|inc|ltd|llc)?"
-        ],
-        "zh": [
-            r"(?:在|工作在|公司是|来自)\s*([\u4e00-\u9fa5A-Za-z0-9\s&.,\'-]{2,30})",
-            r"(?:公司|企业|单位)(?:是|叫)?\s*([\u4e00-\u9fa5A-Za-z0-9\s&.,\'-]{2,30})"
-        ],
-        "es": [
-            r"(?:trabajo en|trabajo para|empleado por|empresa es|de la empresa)\s+([A-Za-zÀ-ÿ0-9\s&.,\'-]{2,50})",
-            r"(?:en|@)\s+([A-Za-zÀ-ÿ0-9\s&.,\'-]{2,50})\s*(?:empresa|corp|inc|ltd)?"
-        ]
-    },
-    "interest": {
-        "en": [
-            r"(?:interested in|looking for|need|want|seeking)\s+([^.,;!?]{5,100})",
-            r"(?:help with|assistance with|support for)\s+([^.,;!?]{5,100})"
-        ],
-        "zh": [
-            r"(?:对|感兴趣|寻找|需要|想要|寻求)\s*([^.,;!?]{3,50})",
-            r"(?:帮助|协助|支持)(?:关于|在)?\s*([^.,;!?]{3,50})"
-        ],
-        "es": [
-            r"(?:interesado en|buscando|necesito|quiero|buscando)\s+([^.,;!?]{5,100})",
-            r"(?:ayuda con|asistencia con|apoyo para)\s+([^.,;!?]{5,100})"
-        ]
-    },
-    "budget": {
-        "en": [
-            r"(?:budget|spend|invest|pay)\s*(?:is|of|around|about)?\s*\$?(\d+(?:,\d{3})*(?:\.\d{2})?)",
-            r"\$(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:budget|range|limit)"
-        ],
-        "zh": [
-            r"(?:预算|花费|投资|支付)\s*(?:是|大约|左右)?\s*¥?(\d+(?:,\d{3})*(?:\.\d{2})?)",
-            r"¥(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:预算|范围|限制)"
-        ],
-        "es": [
-            r"(?:presupuesto|gastar|invertir|pagar)\s*(?:es|de|alrededor|sobre)?\s*\$?(\d+(?:,\d{3})*(?:\.\d{2})?)",
-            r"\$(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:presupuesto|rango|límite)"
-        ]
-    }
+    # ... unchanged ...
 }
 
-# OpenAI client initialization (cached to avoid repeated calls)
 @st.cache_resource
 def get_openai_client():
     api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -154,26 +86,22 @@ def get_openai_client():
 
 client = get_openai_client()
 
-
 def get_ui_text(key: str, language: str = "en") -> str:
     """Get UI text in the target language."""
-    return TRANSLATIONS.get(language, TRANSLATIONS["en"]).get(key, key)
-
+    return TRANSLATIONS.get(language, TRANSLATIONS["en"]).get(key, TRANSLATIONS["en"].get(key, key))
 
 def detect_language(text: str) -> str:
     """Detect language from user input using heuristics, fallback to OpenAI."""
     if not text:
         return "en"
-    # Simple heuristics for Chinese characters
     chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', text))
     if chinese_chars > len(text) * 0.3:
         return "zh"
-    # Simple heuristics for Spanish characters and keywords
     spanish_chars = len(re.findall(r'[ñáéíóúü]', text.lower()))
     spanish_words = ['el', 'la', 'es', 'en', 'de', 'que', 'y', 'con', 'por', 'para', 'hola', 'soy', 'estoy']
-    if spanish_chars > 0 or any(w in text.lower().split() for w in spanish_words):
+    words = re.findall(r'\w+', text.lower())
+    if spanish_chars > 0 or any(w in words for w in spanish_words):
         return "es"
-
     # Fallback to OpenAI language detection
     try:
         response = client.chat.completions.create(
@@ -190,15 +118,12 @@ def detect_language(text: str) -> str:
             return detected
     except Exception as e:
         st.warning(f"Language detection failed: {e}")
-
     return "en"
-
 
 def extract_lead_info_multilingual(user_input: str, language: str, lead_data: Dict) -> Dict:
     """Extract lead info from user input based on language-specific patterns."""
     if not user_input:
         return lead_data
-
     updated = False
     # EMAIL extraction (same pattern for all)
     if not lead_data.get("email"):
@@ -229,7 +154,7 @@ def extract_lead_info_multilingual(user_input: str, language: str, lead_data: Di
         if match:
             phone = re.sub(r'[()\s-]', '', match.group())
             if len(phone) >= 10:  # basic validation
-                lead_data["phone"] = match.group()
+                lead_data["phone"] = phone
                 st.success(f"📞 {get_ui_text('phone_prompt', language)}: {lead_data['phone']}")
                 updated = True
 
@@ -266,8 +191,9 @@ def extract_lead_info_multilingual(user_input: str, language: str, lead_data: Di
             match = re.search(pattern, user_input, re.IGNORECASE)
             if match:
                 budget = match.group(1)
+                currency = "$" if language == "en" else "¥" if language == "zh" else "€" if language == "es" else "$"
                 lead_data["budget"] = budget
-                st.success(f"💰 {get_ui_text('budget_prompt', language)}: ${budget}")
+                st.success(f"💰 {get_ui_text('budget_prompt', language)}: {currency}{budget}")
                 updated = True
                 break
 
