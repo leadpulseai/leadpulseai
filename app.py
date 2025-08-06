@@ -10,31 +10,6 @@ import uuid
 import hashlib
 import time
 from typing import Dict, List, Optional
-import plotly.express as px
-import plotly.graph_objects as go
-
-# Import our comprehensive modules
-from intro_page import render_intro_page, should_show_intro
-from customization import (
-    render_customization_dashboard, load_config, save_config,
-    get_industry_template, get_tone_settings
-)
-from multilanguage import (
-    get_ui_text, detect_language, translate_text, extract_lead_info,
-    get_supported_languages
-)
-from database import get_db_manager
-from session_manager import get_session_manager
-from advanced_dashboard import get_dashboard
-from email_notifications import get_email_manager
-from crm_integrations import get_crm_manager
-
-# Initialize managers
-db_manager = get_db_manager()
-session_manager = get_session_manager()
-dashboard = get_dashboard()
-email_manager = get_email_manager()
-crm_manager = get_crm_manager()
 
 # Page configuration
 st.set_page_config(
@@ -51,686 +26,736 @@ def get_openai_client():
     try:
         api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
         if not api_key:
-            st.error("OpenAI API key not found. Please configure it in Streamlit secrets.")
+            st.error("OpenAI API key not found. Please set it in Streamlit secrets or as an environment variable.")
             st.stop()
         return OpenAI(api_key=api_key)
     except Exception as e:
-        st.error(f"Failed to initialize OpenAI client: {e}")
+        st.error(f"Error initializing OpenAI client: {e}")
         st.stop()
 
-client = get_openai_client()
+# Load configuration
+@st.cache_data
+def load_config():
+    """Load configuration from file or create default if not exists."""
+    default_config = {
+        "branding": {
+            "name": "Lia",
+            "logo_url": "⚡",
+            "primary_color": "#3B82F6",
+            "secondary_color": "#1E1E1E",
+            "font_family": "Segoe UI, sans-serif"
+        },
+        "intro": {
+            "enabled": True,
+            "show_once_per_session": True,
+            "animation_speed": "medium"
+        },
+        "welcome_message": "Hi! I'm Lia, your AI assistant from LeadPulse. How can I help you today?",
+        "tone": "professional",
+        "industry_template": "saas",
+        "intro_description": "An AI assistant that levels up your lead generation.",
+        "supported_languages": [
+            {"code": "en", "display_name": "English"},
+            {"code": "zh", "display_name": "中文"},
+            {"code": "es", "display_name": "Español"}
+        ],
+        "lead_qualification": {
+            "questions": {
+                "budget": "What's your budget range for this project?",
+                "timeline": "When are you looking to get started?",
+                "decision_maker": "Are you the decision maker for this purchase?",
+                "company_size": "How many employees does your company have?",
+                "industry": "What industry is your business in?",
+                "pain_point": "What's your biggest challenge right now?"
+            },
+            "scoring": {
+                "email_provided": 30,
+                "phone_provided": 20,
+                "company_provided": 15,
+                "budget_provided": 15,
+                "timeline_provided": 10,
+                "decision_maker_yes": 10
+            }
+        },
+        "features": {
+            "lead_capture": True,
+            "visitor_engagement": True,
+            "auto_qualification": True,
+            "instant_answers": True,
+            "data_storage": True,
+            "time_saving": True
+        },
+        "admin": {
+            "username": "admin",
+            "password_hash": None,
+            "email_notifications": True,
+            "dashboard_enabled": True
+        }
+    }
+    
+    if os.path.exists("config.json"):
+        try:
+            with open("config.json", "r") as f:
+                config = json.load(f)
+                # Merge with default config to ensure all keys exist
+                return merge_config(default_config, config)
+        except Exception as e:
+            st.error(f"Error loading configuration: {e}")
+            return default_config
+    else:
+        save_config(default_config)
+        return default_config
+
+def merge_config(default: Dict, user: Dict) -> Dict:
+    """Merge user config with default config to ensure all keys exist."""
+    result = default.copy()
+    for key, value in user.items():
+        if isinstance(value, dict) and key in result:
+            result[key] = merge_config(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+def save_config(config: Dict):
+    """Save configuration to file."""
+    try:
+        with open("config.json", "w") as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        st.error(f"Error saving configuration: {e}")
+        return False
+
+# Language support functions
+def get_ui_text(key: str, language: str = "en", fallback: str = None) -> str:
+    """Get UI text in the specified language."""
+    translations = {
+        "en": {
+            "welcome": "Hi! I'm Lia, your AI assistant from LeadPulse. How can I help you today?",
+            "input_placeholder": "Type your message here...",
+            "send_button": "Send",
+            "lead_captured": "Thank you for providing your information!",
+            "email_prompt": "Could you share your email address?",
+            "name_prompt": "What's your name?",
+            "phone_prompt": "What's your phone number?",
+            "interest_prompt": "What are you interested in?",
+            "company_prompt": "What company are you with?",
+            "budget_prompt": "What's your budget range for this project?",
+            "timeline_prompt": "When are you looking to get started?",
+            "error_message": "I'm having trouble connecting right now. Please try again in a moment.",
+            "lead_score": "Lead Score",
+            "contact_info": "Contact Information",
+            "qualification_info": "Qualification Details",
+            "next_steps": "Recommended Next Steps",
+            "high_priority": "High Priority Lead",
+            "medium_priority": "Medium Priority Lead",
+            "low_priority": "Low Priority Lead",
+            "language": "Language",
+            "total_leads": "Total Leads",
+            "new_today": "New Today",
+            "conversion_rate": "Conversion Rate",
+            "avg_score": "Average Score"
+        },
+        "zh": {
+            "welcome": "你好！我是Lia，您的LeadPulse AI助手。今天我能帮您什么？",
+            "input_placeholder": "在这里输入您的消息...",
+            "send_button": "发送",
+            "lead_captured": "感谢您提供信息！",
+            "email_prompt": "您能分享您的电子邮件地址吗？",
+            "name_prompt": "您叫什么名字？",
+            "phone_prompt": "您的电话号码是多少？",
+            "interest_prompt": "您对什么感兴趣？",
+            "company_prompt": "您在哪家公司工作？",
+            "budget_prompt": "这个项目的预算范围是多少？",
+            "timeline_prompt": "您计划什么时候开始？",
+            "error_message": "我现在连接有问题。请稍后再试。",
+            "lead_score": "潜在客户评分",
+            "contact_info": "联系信息",
+            "qualification_info": "资格详情",
+            "next_steps": "建议的下一步",
+            "high_priority": "高优先级潜在客户",
+            "medium_priority": "中等优先级潜在客户",
+            "low_priority": "低优先级潜在客户",
+            "language": "语言",
+            "total_leads": "总潜在客户",
+            "new_today": "今日新增",
+            "conversion_rate": "转化率",
+            "avg_score": "平均分数"
+        },
+        "es": {
+            "welcome": "¡Hola! Soy Lia, tu asistente de IA de LeadPulse. ¿Cómo puedo ayudarte hoy?",
+            "input_placeholder": "Escribe tu mensaje aquí...",
+            "send_button": "Enviar",
+            "lead_captured": "¡Gracias por proporcionar tu información!",
+            "email_prompt": "¿Podrías compartir tu dirección de correo electrónico?",
+            "name_prompt": "¿Cómo te llamas?",
+            "phone_prompt": "¿Cuál es tu número de teléfono?",
+            "interest_prompt": "¿En qué estás interesado?",
+            "company_prompt": "¿Con qué empresa estás?",
+            "budget_prompt": "¿Cuál es tu rango de presupuesto para este proyecto?",
+            "timeline_prompt": "¿Cuándo estás buscando comenzar?",
+            "error_message": "Tengo problemas de conexión ahora. Por favor, inténtalo de nuevo en un momento.",
+            "lead_score": "Puntuación de Lead",
+            "contact_info": "Información de Contacto",
+            "qualification_info": "Detalles de Calificación",
+            "next_steps": "Próximos Pasos Recomendados",
+            "high_priority": "Lead de Alta Prioridad",
+            "medium_priority": "Lead de Prioridad Media",
+            "low_priority": "Lead de Baja Prioridad",
+            "language": "Idioma",
+            "total_leads": "Total de Leads",
+            "new_today": "Nuevos Hoy",
+            "conversion_rate": "Tasa de Conversión",
+            "avg_score": "Puntuación Promedio"
+        }
+    }
+    
+    if language in translations and key in translations[language]:
+        return translations[language][key]
+    elif fallback:
+        return fallback
+    else:
+        return translations["en"].get(key, key)
+
+def detect_language(text: str) -> str:
+    """Detect language from user input using simple heuristics."""
+    if not text:
+        return "en"
+    
+    # Simple heuristic detection
+    chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', text))
+    spanish_chars = len(re.findall(r'[ñáéíóúü]', text.lower()))
+    
+    # If significant Chinese characters, likely Chinese
+    if chinese_chars > len(text) * 0.3:
+        return "zh"
+    
+    # If Spanish characters or common Spanish words
+    spanish_words = ['el', 'la', 'es', 'en', 'de', 'que', 'y', 'con', 'por', 'para', 'hola', 'soy', 'estoy']
+    if spanish_chars > 0 or any(word in text.lower().split() for word in spanish_words):
+        return "es"
+    
+    return "en"  # Default to English
+
+def extract_lead_info(user_input: str, language: str, lead_data: Dict) -> Dict:
+    """Extract lead information using language-specific patterns."""
+    if not user_input:
+        return lead_data
+    
+    # Email extraction (universal format)
+    if not lead_data.get("email"):
+        email_pattern = r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}"
+        email_match = re.search(email_pattern, user_input, re.IGNORECASE)
+        if email_match:
+            lead_data["email"] = email_match.group().lower()
+            st.toast(f"📧 Email captured: {lead_data['email']}")
+    
+    # Name extraction
+    if not lead_data.get("name"):
+        name_patterns = [
+            r"(?:my name is|I am|I'm|call me|this is)\s+([A-Za-z\s]{2,30})",
+            r"(?:I'm|I am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"(?:name|called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"
+        ]
+        
+        for pattern in name_patterns:
+            name_match = re.search(pattern, user_input, re.IGNORECASE)
+            if name_match:
+                name = name_match.group(1).strip().title()
+                if len(name) > 1 and not any(word in name.lower() for word in ['email', 'phone', 'number', 'address']):
+                    lead_data["name"] = name
+                    st.toast(f"👤 Name captured: {lead_data['name']}")
+                    break
+    
+    # Phone extraction
+    if not lead_data.get("phone"):
+        phone_pattern = r"\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"
+        phone_match = re.search(phone_pattern, user_input)
+        if phone_match:
+            phone = re.sub(r'[()\s-]', '', phone_match.group())
+            if len(phone) >= 10:
+                lead_data["phone"] = phone_match.group()
+                st.toast(f"📞 Phone captured: {lead_data['phone']}")
+    
+    # Company extraction
+    if not lead_data.get("company"):
+        company_patterns = [
+            r"(?:work at|work for|employed by|company is|from)\s+([A-Za-z0-9\s&.,'-]{2,50})",
+            r"(?:at|@)\s+([A-Z][A-Za-z0-9\s&.,'-]{1,49})\s*(?:company|corp|inc|ltd|llc)?"
+        ]
+        
+        for pattern in company_patterns:
+            company_match = re.search(pattern, user_input, re.IGNORECASE)
+            if company_match:
+                company = company_match.group(1).strip().title()
+                if len(company) > 2 and not any(word in company.lower() for word in ['email', 'phone', 'number']):
+                    lead_data["company"] = company
+                    st.toast(f"🏢 Company captured: {lead_data['company']}")
+                    break
+    
+    # Interest extraction
+    if not lead_data.get("interest"):
+        interest_patterns = [
+            r"(?:interested in|looking for|need|want|seeking)\s+([^.,;!?]{5,100})",
+            r"(?:help with|assistance with|support for)\s+([^.,;!?]{5,100})"
+        ]
+        
+        for pattern in interest_patterns:
+            interest_match = re.search(pattern, user_input, re.IGNORECASE)
+            if interest_match:
+                interest = interest_match.group(1).strip()
+                if 5 <= len(interest) <= 100:
+                    lead_data["interest"] = interest
+                    st.toast(f"💡 Interest captured: {lead_data['interest']}")
+                    break
+    
+    return lead_data
+
+def calculate_lead_score(lead_data: Dict, config: Dict) -> int:
+    """Calculate lead score based on available information."""
+    score = 0
+    scoring_config = config.get("lead_qualification", {}).get("scoring", {})
+    
+    if lead_data.get("email"):
+        score += scoring_config.get("email_provided", 30)
+    
+    if lead_data.get("phone"):
+        score += scoring_config.get("phone_provided", 20)
+    
+    if lead_data.get("company"):
+        score += scoring_config.get("company_provided", 15)
+    
+    if lead_data.get("budget"):
+        score += scoring_config.get("budget_provided", 15)
+    
+    if lead_data.get("interest"):
+        score += scoring_config.get("timeline_provided", 10)
+    
+    if lead_data.get("name"):
+        score += 10
+    
+    return min(score, 100)
+
+def get_lead_priority(score: int, language: str = "en") -> tuple:
+    """Get lead priority based on score."""
+    if score >= 70:
+        return ("high", get_ui_text("high_priority", language), "🔥")
+    elif score >= 40:
+        return ("medium", get_ui_text("medium_priority", language), "⚡")
+    else:
+        return ("low", get_ui_text("low_priority", language), "📝")
+
+def build_system_prompt(config: Dict, language: str) -> str:
+    """Build system prompt based on configuration."""
+    assistant_name = config["branding"]["name"]
+    tone = config["tone"]
+    industry = config["industry_template"]
+    
+    # Get industry settings
+    industry_settings = {
+        "saas": {"business_type": "a SaaS company", "target_audience": "Business professionals"},
+        "b2b": {"business_type": "a B2B service provider", "target_audience": "Business owners"},
+        "marketing": {"business_type": "a marketing agency", "target_audience": "Businesses looking to grow"},
+        "general": {"business_type": "a business", "target_audience": "Potential customers"}
+    }.get(industry, {"business_type": "a business", "target_audience": "Potential customers"})
+    
+    prompt = f"""You are {assistant_name}, an AI lead generation assistant for LeadPulse.
+
+PERSONALITY & TONE:
+- Use a {tone} tone
+- Be conversational and engaging
+- Keep responses concise but helpful
+
+INDUSTRY FOCUS:
+- You work for {industry_settings['business_type']}
+- Your target audience is {industry_settings['target_audience']}
+
+PRIMARY GOALS:
+1. Engage visitors in natural conversation
+2. Collect lead information (name, email, phone, company, interest)
+3. Qualify leads by understanding their needs
+4. Provide helpful information about services
+5. Guide qualified leads toward next steps
+
+LEAD COLLECTION STRATEGY:
+- Ask for information naturally within conversation flow
+- Don't be pushy - build rapport first
+- Use the conversation context to ask relevant questions
+- Celebrate when users provide information
+
+LANGUAGE:
+- Respond in {language} language
+- Adapt your communication style to the user's language and tone
+
+CONVERSATION FLOW:
+1. Greet warmly and ask how you can help
+2. Listen to their needs and ask clarifying questions
+3. Naturally collect contact information during the conversation
+4. Qualify their interest level and timeline
+5. Suggest next steps or offer to connect them with a human
+
+Remember: You're not just collecting data - you're building relationships and providing value."""
+    
+    return prompt
 
 def initialize_session_state():
-    """Initialize session state with persistent data and default values."""
-    # Initialize session manager and get session ID
-    session_id = session_manager.initialize_session_state()
+    """Initialize session state variables."""
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = str(uuid.uuid4())
     
-    # Initialize default values if not present
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    if "lead_data" not in st.session_state:
+        st.session_state.lead_data = {}
+    
     if "language" not in st.session_state:
         st.session_state.language = "en"
     
     if "show_intro" not in st.session_state:
-        st.session_state.show_intro = should_show_intro()
-    
-    if "admin_authenticated" not in st.session_state:
-        st.session_state.admin_authenticated = False
+        config = load_config()
+        st.session_state.show_intro = config["intro"]["enabled"]
     
     if "current_page" not in st.session_state:
         st.session_state.current_page = "chat"
     
-    # Load configuration
-    if "config" not in st.session_state:
-        st.session_state.config = load_config()
+    if "admin_authenticated" not in st.session_state:
+        st.session_state.admin_authenticated = False
     
-    return session_id
+    return st.session_state.session_id
 
-def get_ai_response(messages: List[Dict], language: str = "en") -> str:
-    """Get AI response from OpenAI with enhanced prompting."""
-    config = st.session_state.config
+def render_intro_page():
+    """Render the intro page."""
+    config = load_config()
     
-    # Build system prompt with configuration
-    system_prompt = build_system_prompt(config, language)
+    # Apply custom styling
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background: linear-gradient(135deg, {config["branding"]["secondary_color"]} 0%, #2d2d2d 100%);
+            color: white;
+            font-family: {config["branding"]["font_family"]};
+        }}
+        .intro-container {{
+            text-align: center;
+            padding: 2rem;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }}
+        .lia-text {{
+            font-size: 4rem;
+            font-weight: bold;
+            color: {config["branding"]["primary_color"]};
+            margin: 1rem 0;
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }}
+        .level-up-text {{
+            font-family: monospace;
+            font-size: 1.5rem;
+            color: white;
+            margin: 1rem 0;
+            letter-spacing: 2px;
+        }}
+        .description-text {{
+            font-size: 1.2rem;
+            color: #ccc;
+            margin: 2rem 0;
+            max-width: 600px;
+        }}
+        .language-selector-label {{
+            font-size: 1rem;
+            color: #aaa;
+            margin: 2rem 0 1rem 0;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     
-    # Prepare messages for OpenAI
-    openai_messages = [{"role": "system", "content": system_prompt}]
-    openai_messages.extend(messages)
+    # Main intro content
+    st.markdown('<div class="intro-container">', unsafe_allow_html=True)
     
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=openai_messages,
-            temperature=0.7,
-            max_tokens=1000
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Error getting AI response: {e}")
-        return get_ui_text("error_response", language, "I apologize, but I\"m having trouble responding right now. Please try again.")
-
-def build_system_prompt(config: Dict, language: str) -> str:
-    """Build comprehensive system prompt based on configuration."""
-    assistant_name = config.get("branding", {}).get("name", "Lia")
-    tone = config.get("tone", "friendly")
-    industry_template = config.get("industry_template", "saas")
+    # Lightning bolt logo
+    st.markdown(f'<div style="font-size: 5rem; margin-bottom: 1rem;">{config["branding"]["logo_url"]}</div>', unsafe_allow_html=True)
     
-    # Get tone and industry settings
-    tone_settings = get_tone_settings(tone)
-    industry_settings = get_industry_template(industry_template)
+    # Animated "lia" text
+    st.markdown('<div class="lia-text">lia</div>', unsafe_allow_html=True)
     
-    # Build dynamic prompt
-    system_prompt = f"""You are {assistant_name}, an AI lead generation assistant for {industry_settings.get("business_type", "a business")}. 
-
-PERSONALITY & TONE:
-{tone_settings.get("description", "Be helpful and professional.")}
-- Communication style: {tone_settings.get("style", "Professional and friendly")}
-- Use language: {language}
-
-BUSINESS CONTEXT:
-- Industry: {industry_settings.get("name", "General Business")}
-- Target audience: {industry_settings.get("target_audience", "Business professionals")}
-- Key value propositions: {", ".join(industry_settings.get("value_props", ["Quality service", "Expert solutions"]))}
-
-LEAD QUALIFICATION GOALS:
-Your primary objective is to naturally extract the following information through conversation:
-1. Name (essential)
-2. Email address (essential) 
-3. Phone number (if possible)
-4. Company name and size
-5. Specific interests or needs
-6. Budget range or timeline
-7. Decision-making authority
-
-CONVERSATION GUIDELINES:
-- Start with a warm, personalized greeting
-- Ask open-ended questions to understand their needs
-- Provide value and insights related to their interests
-- Gradually and naturally request contact information
-- Be helpful even if they don\'t provide all information
-- If they ask about pricing, gather their requirements first
-- Always maintain a {tone} tone throughout the conversation
-
-LEAD SCORING CRITERIA:
-- Email provided: High priority
-- Phone + Email: Very high priority  
-- Company information: Medium priority
-- Budget/timeline discussed: High priority
-- Decision maker confirmed: Very high priority
-
-Remember: Focus on being genuinely helpful while naturally gathering lead information. Never be pushy or overly sales-focused."""
-
-    return system_prompt
-
-def extract_and_save_lead_info(conversation_history: List[Dict], session_id: str, language: str):
-    """Extract lead information from conversation and save to database."""
-    # Extract lead info using multilanguage module
-    lead_info = extract_lead_info(conversation_history, language)
+    # Level Up text
+    st.markdown('<div class="level-up-text">LEVEL UP</div>', unsafe_allow_html=True)
     
-    if lead_info and any(lead_info.values()):
-        # Calculate lead score
-        score = calculate_lead_score(lead_info)
-        lead_info["score"] = score
-        lead_info["priority"] = get_lead_priority(score)
-        lead_info["language"] = language
+    # Description
+    st.markdown(f'<p class="description-text">{config["intro_description"]}</p>', unsafe_allow_html=True)
+    
+    st.markdown('<p class="language-selector-label">Choose your language:</p>', unsafe_allow_html=True)
+    
+    # Language selection buttons
+    lang_cols = st.columns(len(config["supported_languages"]))
+    for i, lang in enumerate(config["supported_languages"]):
+        with lang_cols[i]:
+            if st.button(lang["display_name"], key=f"lang_btn_{lang['code']}"):
+                st.session_state.language = lang["code"]
+                st.session_state.show_intro = False
+                st.rerun()
+    
+    st.write("<br>", unsafe_allow_html=True)
+    if st.button("Start Chatting with Lia", key="start_chat_btn"):
+        st.session_state.show_intro = False
+        st.rerun()
         
-        # Save to database
-        lead_id = session_manager.save_lead_data(session_id, lead_info)
-        
-        # Update session state
-        st.session_state.lead_data.update(lead_info)
-        
-        # Trigger integrations if configured
-        if any(crm_manager._is_integration_enabled(integration) for integration in ["hubspot", "salesforce", "airtable", "notion"]):
-            sync_results = crm_manager.sync_lead_to_integrations(lead_info, session_id)
-            
-        # Send notifications if configured
-        if any(crm_manager._is_integration_enabled(integration) for integration in ["slack", "discord", "webhook"]):
-            notification_results = crm_manager.send_lead_notification(lead_info, session_id)
-        
-        # Send email notification if configured
-        if email_manager.smtp_config.get("username") and st.session_state.config.get("admin", {}).get("email_notifications", False):
-            admin_email = st.session_state.config.get("admin", {}).get("email", "")
-            if admin_email:
-                email_manager.send_new_lead_notification(lead_info, [admin_email], language)
-        
-        return lead_info
-    
-    return None
-
-def calculate_lead_score(lead_info: Dict) -> int:
-    """Calculate lead score based on available information."""
-    config = st.session_state.config
-    scoring = config.get("lead_qualification", {}).get("scoring", {})
-    
-    score = 0
-    
-    # Apply scoring rules
-    if lead_info.get("email"):
-        score += scoring.get("email_provided", 30)
-    
-    if lead_info.get("phone"):
-        score += scoring.get("phone_provided", 20)
-    
-    if lead_info.get("company"):
-        score += scoring.get("company_provided", 15)
-    
-    if lead_info.get("budget"):
-        score += scoring.get("budget_provided", 15)
-    
-    if lead_info.get("timeline"):
-        score += scoring.get("timeline_provided", 10)
-    
-    # Additional scoring based on conversation quality
-    if lead_info.get("interest") and len(lead_info.get("interest", "")) > 20:
-        score += 10  # Detailed interest
-    
-    return min(score, 100)  # Cap at 100
-
-def get_lead_priority(score: int) -> str:
-    """Determine lead priority based on score."""
-    if score >= 70:
-        return "high"
-    elif score >= 40:
-        return "medium"
-    else:
-        return "low"
+    st.markdown("</div>", unsafe_allow_html=True)
 
 def render_sidebar():
-    """Render sidebar with lead information and navigation."""
-    with st.sidebar:
-        st.title("⚡ Lia Dashboard")
+    """Render the sidebar with lead information and navigation."""
+    config = load_config()
+    language = st.session_state.language
+    
+    st.sidebar.title(f"{config['branding']['logo_url']} {config['branding']['name']}")
+    
+    # Navigation
+    st.sidebar.subheader("Navigation")
+    pages = {
+        "chat": "💬 Chat",
+        "dashboard": "📊 Dashboard", 
+        "settings": "⚙️ Settings"
+    }
+    
+    for page_key, page_name in pages.items():
+        if st.sidebar.button(page_name, key=f"nav_{page_key}"):
+            st.session_state.current_page = page_key
+            st.rerun()
+    
+    # Language selector
+    st.sidebar.subheader(f"🌍 {get_ui_text('language', language)}")
+    
+    languages = {lang["code"]: lang["display_name"] for lang in config["supported_languages"]}
+    selected_language = st.sidebar.selectbox(
+        "Select Language",
+        options=list(languages.keys()),
+        format_func=lambda x: languages[x],
+        index=list(languages.keys()).index(st.session_state.language),
+        key="language_selector"
+    )
+    
+    if selected_language != st.session_state.language:
+        st.session_state.language = selected_language
+        st.rerun()
+    
+    # Lead information
+    if st.session_state.lead_data:
+        st.sidebar.subheader(f"📋 {get_ui_text('contact_info', language)}")
         
-        # Navigation
-        page = st.selectbox(
-            "Navigate",
-            options=["chat", "dashboard", "settings", "integrations"],
-            format_func=lambda x: {
-                "chat": "💬 Chat",
-                "dashboard": "📊 Dashboard", 
-                "settings": "⚙️ Settings",
-                "integrations": "🔗 Integrations"
-            }.get(x, x),
-            index=["chat", "dashboard", "settings", "integrations"].index(st.session_state.current_page)
+        lead_score = calculate_lead_score(st.session_state.lead_data, config)
+        priority, priority_text, priority_icon = get_lead_priority(lead_score, language)
+        
+        st.sidebar.metric(
+            get_ui_text("lead_score", language),
+            f"{lead_score}/100",
+            delta=None
         )
         
-        if page != st.session_state.current_page:
-            st.session_state.current_page = page
-            st.rerun()
+        st.sidebar.markdown(f"{priority_icon} **{priority_text}**")
         
-        st.divider()
-        
-        # Current lead information
-        st.subheader("📋 Current Lead")
-        lead_data = st.session_state.get("lead_data", {})
-        
-        if any(lead_data.values()):
-            # Display lead info
-            if lead_data.get("name"):
-                st.write(f"**Name:** {lead_data["name"]}")
-            if lead_data.get("email"):
-                st.write(f"**Email:** {lead_data["email"]}")
-            if lead_data.get("company"):
-                st.write(f"**Company:** {lead_data["company"]}")
-            if lead_data.get("phone"):
-                st.write(f"**Phone:** {lead_data["phone"]}")
-            
-            # Lead score and priority
-            score = lead_data.get("score", 0)
-            priority = lead_data.get("priority", "low")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Score", f"{score}/100")
-            with col2:
-                priority_color = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-                st.write(f"**Priority:** {priority_color.get(priority, "⚪")} {priority.title()}")
-        else:
-            st.info("No lead information captured yet.")
-        
-        st.divider()
-        
-        # Quick stats
-        st.subheader("📈 Quick Stats")
-        analytics = db_manager.get_analytics_summary(days=7)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Leads (7d)", analytics["total_leads"])
-        with col2:
-            st.metric("Avg Score", f"{analytics["average_score"]:.1f}")
-        
-        # Language selector
-        st.divider()
-        st.subheader("🌍 Language")
-        
-        languages = get_supported_languages()
-        current_lang = st.session_state.get("language", "en")
-        
-        selected_lang = st.selectbox(
-            "Select Language",
-            options=[lang["code"] for lang in languages],
-            format_func=lambda x: next(lang["display_name"] for lang in languages if lang["code"] == x),
-            index=[lang["code"] for lang in languages].index(current_lang)
-        )
-        
-        if selected_lang != current_lang:
-            st.session_state.language = selected_lang
-            st.rerun()
+        # Display lead information
+        for key, value in st.session_state.lead_data.items():
+            if value:
+                icon_map = {
+                    "name": "👤",
+                    "email": "📧", 
+                    "phone": "📞",
+                    "company": "🏢",
+                    "interest": "💡",
+                    "budget": "💰"
+                }
+                icon = icon_map.get(key, "📝")
+                st.sidebar.markdown(f"{icon} **{key.title()}:** {value}")
+    
+    # Quick stats
+    st.sidebar.subheader("📈 Quick Stats")
+    
+    # Mock stats for demo
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        st.metric(get_ui_text("total_leads", language), "42")
+        st.metric(get_ui_text("conversion_rate", language), "23%")
+    with col2:
+        st.metric(get_ui_text("new_today", language), "7")
+        st.metric(get_ui_text("avg_score", language), "67")
 
 def render_chat_interface():
     """Render the main chat interface."""
-    language = st.session_state.get("language", "en")
+    config = load_config()
+    language = st.session_state.language
+    client = get_openai_client()
     
-    # Chat header
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.title(f"⚡ {st.session_state.config.get("branding", {}).get("name", "Lia")}")
-        st.caption(get_ui_text("chat_subtitle", language, "AI Lead Generation Assistant"))
+    st.title(f"💬 Chat with {config['branding']['name']}")
     
-    # Chat messages container
-    chat_container = st.container()
-    
-    with chat_container:
-        # Display conversation history
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
     
     # Chat input
-    if prompt := st.chat_input(get_ui_text("chat_placeholder", language, "Type your message here...")):
-        # Add user message to chat
+    if prompt := st.chat_input(get_ui_text("input_placeholder", language)):
+        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Save user message to database
-        session_manager.save_message(
-            session_id=st.session_state.session_id,
-            role="user",
-            content=prompt,
-            language=language
-        )
-        
-        # Display user message
         with st.chat_message("user"):
-            st.write(prompt)
+            st.markdown(prompt)
         
-        # Get AI response
+        # Detect language and extract lead info
+        detected_lang = detect_language(prompt)
+        if detected_lang != language:
+            st.session_state.language = detected_lang
+            language = detected_lang
+        
+        # Extract lead information
+        st.session_state.lead_data = extract_lead_info(prompt, language, st.session_state.lead_data)
+        
+        # Generate AI response
         with st.chat_message("assistant"):
-            with st.spinner(get_ui_text("thinking", language, "Thinking...")):
-                response = get_ai_response(st.session_state.messages, language)
-                st.write(response)
-        
-        # Add assistant response to chat
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        
-        # Save assistant message to database
-        session_manager.save_message(
-            session_id=st.session_state.session_id,
-            role="assistant", 
-            content=response,
-            language=language
-        )
-        
-        # Extract and save lead information
-        lead_info = extract_and_save_lead_info(
-            st.session_state.messages,
-            st.session_state.session_id,
-            language
-        )
-        
-        # Show lead capture notification
-        if lead_info and any(lead_info.values()):
-            st.success(get_ui_text("lead_updated", language, "✅ Lead information updated!"))
-        
-        # Rerun to update the interface
-        st.rerun()
+            try:
+                system_prompt = build_system_prompt(config, language)
+                
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(st.session_state.messages)
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    max_tokens=500,
+                    temperature=0.7
+                )
+                
+                assistant_response = response.choices[0].message.content
+                st.markdown(assistant_response)
+                
+                # Add assistant response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+                
+            except Exception as e:
+                error_msg = get_ui_text("error_message", language)
+                st.error(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 def render_dashboard_page():
-    """Render the advanced dashboard page."""
-    language = st.session_state.get("language", "en")
-    dashboard.render_dashboard(language)
+    """Render the dashboard page."""
+    language = st.session_state.language
+    
+    st.title(f"📊 {get_ui_text('dashboard', language, 'Dashboard')}")
+    
+    # Mock dashboard content
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(get_ui_text("total_leads", language), "42", "↗️ 12%")
+    with col2:
+        st.metric(get_ui_text("new_today", language), "7", "↗️ 3")
+    with col3:
+        st.metric(get_ui_text("conversion_rate", language), "23%", "↗️ 2%")
+    with col4:
+        st.metric(get_ui_text("avg_score", language), "67", "↗️ 5")
+    
+    # Charts placeholder
+    st.subheader("📈 Lead Generation Trends")
+    
+    # Mock data for chart
+    import plotly.express as px
+    import pandas as pd
+    
+    df = pd.DataFrame({
+        'Date': pd.date_range('2024-01-01', periods=30, freq='D'),
+        'Leads': [5, 8, 12, 7, 15, 9, 11, 13, 6, 10, 14, 8, 12, 16, 9, 11, 7, 13, 15, 8, 10, 12, 14, 9, 11, 13, 7, 15, 12, 10]
+    })
+    
+    fig = px.line(df, x='Date', y='Leads', title='Daily Lead Generation')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Recent leads table
+    st.subheader("🔥 Recent Leads")
+    
+    # Mock recent leads data
+    recent_leads = pd.DataFrame({
+        'Name': ['John Doe', 'Jane Smith', 'Bob Johnson', 'Alice Brown'],
+        'Email': ['john@example.com', 'jane@company.com', 'bob@startup.io', 'alice@corp.com'],
+        'Company': ['TechCorp', 'StartupXYZ', 'InnovateLab', 'BigCorp'],
+        'Score': [85, 72, 91, 68],
+        'Priority': ['🔥 High', '⚡ Medium', '🔥 High', '⚡ Medium']
+    })
+    
+    st.dataframe(recent_leads, use_container_width=True)
 
 def render_settings_page():
-    """Render the settings and customization page."""
-    language = st.session_state.get("language", "en")
+    """Render the settings page."""
+    language = st.session_state.language
     
-    st.title(get_ui_text("settings_title", language, "⚙️ Settings & Customization"))
+    st.title(f"⚙️ {get_ui_text('settings', language, 'Settings')}")
     
-    # Settings tabs
-    tab1, tab2, tab3 = st.tabs([
-        get_ui_text("branding", language, "Branding"),
-        get_ui_text("email_settings", language, "Email Settings"),
-        get_ui_text("admin_settings", language, "Admin Settings")
-    ])
+    config = load_config()
     
-    with tab1:
-        render_customization_dashboard(language)
-    
-    with tab2:
-        render_email_settings(language)
-    
-    with tab3:
-        render_admin_settings(language)
-
-def render_email_settings(language: str):
-    """Render email configuration settings."""
-    st.subheader(get_ui_text("email_config", language, "📧 Email Configuration"))
-    
-    with st.expander(get_ui_text("smtp_settings", language, "SMTP Settings"), expanded=True):
+    # Branding Settings
+    with st.expander("🏷️ Branding Settings", expanded=True):
         col1, col2 = st.columns(2)
-        
         with col1:
-            smtp_server = st.text_input(
-                get_ui_text("smtp_server", language, "SMTP Server"),
-                value=email_manager.smtp_config.get("smtp_server", "smtp.gmail.com")
+            config["branding"]["name"] = st.text_input(
+                "Assistant Name", 
+                config["branding"]["name"],
+                help="The name of your AI assistant"
             )
-            
-            smtp_port = st.number_input(
-                get_ui_text("smtp_port", language, "SMTP Port"),
-                value=email_manager.smtp_config.get("smtp_port", 587),
-                min_value=1,
-                max_value=65535
+            config["branding"]["primary_color"] = st.color_picker(
+                "Primary Color", 
+                config["branding"]["primary_color"],
+                help="Main brand color"
             )
         
         with col2:
-            username = st.text_input(
-                get_ui_text("email_username", language, "Email Username"),
-                value=email_manager.smtp_config.get("username", "")
+            config["branding"]["logo_url"] = st.text_input(
+                "Logo/Emoji", 
+                config["branding"]["logo_url"],
+                help="Logo or emoji"
             )
-            
-            password = st.text_input(
-                get_ui_text("email_password", language, "Email Password"),
-                type="password",
-                value=email_manager.smtp_config.get("password", "")
+            config["branding"]["secondary_color"] = st.color_picker(
+                "Secondary Color", 
+                config["branding"]["secondary_color"],
+                help="Background color"
             )
+    
+    # Conversation Settings
+    with st.expander("💬 Conversation Settings"):
+        config["welcome_message"] = st.text_area(
+            "Welcome Message", 
+            config["welcome_message"],
+            help="First message shown to users"
+        )
         
-        from_email = st.text_input(
-                get_ui_text("from_email", language, "From Email"),
-                value=email_manager.smtp_config.get("from_email", "")
-            )
-            
-        from_name = st.text_input(
-                get_ui_text("from_name", language, "From Name"),
-                value=email_manager.smtp_config.get("from_name", "Lia - LeadPulse")
-            )
+        tone_options = ["professional", "friendly", "casual"]
+        config["tone"] = st.selectbox(
+            "Conversation Tone",
+            options=tone_options,
+            index=tone_options.index(config["tone"]) if config["tone"] in tone_options else 0
+        )
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button(get_ui_text("save_email_config", language, "💾 Save Configuration")):
-                email_manager.configure_smtp(
-                    smtp_server=smtp_server,
-                    smtp_port=smtp_port,
-                    username=username,
-                    password=password,
-                    from_email=from_email,
-                    from_name=from_name
-                )
-                st.success(get_ui_text("email_config_saved", language, "Email configuration saved!"))
-        
-        with col2:
-            if st.button(get_ui_text("test_email", language, "🧪 Test Connection")):
-                if email_manager.test_smtp_connection():
-                    st.success(get_ui_text("email_test_success", language, "✅ Email connection successful!"))
-                else:
-                    st.error(get_ui_text("email_test_failed", language, "❌ Email connection failed!"))
+        industry_options = ["saas", "b2b", "marketing", "general"]
+        config["industry_template"] = st.selectbox(
+            "Industry Template",
+            options=industry_options,
+            index=industry_options.index(config["industry_template"]) if config["industry_template"] in industry_options else 0
+        )
     
-    # Notification settings
-    st.subheader(get_ui_text("notification_settings", language, "🔔 Notification Settings"))
-    
-    enable_notifications = st.checkbox(
-        get_ui_text("enable_email_notifications", language, "Enable email notifications for new leads"),
-        value=st.session_state.config.get("admin", {}).get("email_notifications", False)
-    )
-    
-    admin_email = st.text_input(
-        get_ui_text("admin_email", language, "Admin Email for Notifications"),
-        value=st.session_state.config.get("admin", {}).get("email", "")
-    )
-    
-    if st.button(get_ui_text("save_notification_settings", language, "💾 Save Notification Settings")):
-        config = st.session_state.config
-        if "admin" not in config:
-            config["admin"] = {}
-        
-        config["admin"]["email_notifications"] = enable_notifications
-        config["admin"]["email"] = admin_email
-        
-        save_config(config)
-        st.session_state.config = config
-        st.success(get_ui_text("notification_settings_saved", language, "Notification settings saved!"))
-
-def render_admin_settings(language: str):
-    """Render admin-specific settings."""
-    st.subheader(get_ui_text("admin_panel", language, "👨‍💼 Admin Panel"))
-    
-    # Database management
-    with st.expander(get_ui_text("database_management", language, "🗄️ Database Management"), expanded=False):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button(get_ui_text("cleanup_old_sessions", language, "🧹 Cleanup Old Sessions")):
-                db_manager.cleanup_old_sessions(days=30)
-                st.success(get_ui_text("cleanup_success", language, "Old sessions cleaned up!"))
-        
-        with col2:
-            if st.button(get_ui_text("export_all_data", language, "📤 Export All Data")):
-                # Export functionality would be implemented here
-                st.info(get_ui_text("export_coming_soon", language, "Export functionality coming soon!"))
-        
-        with col3:
-            if st.button(get_ui_text("reset_analytics", language, "🔄 Reset Analytics")):
-                st.warning(get_ui_text("reset_warning", language, "This action cannot be undone!"))
-    
-    # System information
-    st.subheader(get_ui_text("system_info", language, "ℹ️ System Information"))
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"**{get_ui_text("session_id", language, "Session ID")}:** {st.session_state.session_id[:8]}...")
-        st.markdown(f"**{get_ui_text("language", language, "Language")}:** {language}")
-        st.markdown(f"**{get_ui_text("messages_count", language, "Messages")}:** {len(st.session_state.messages)}")
-    
-    with col2:
-        analytics = db_manager.get_analytics_summary(days=1)
-        st.markdown(f"**{get_ui_text("todays_leads", language, "Today\"s Leads")}:** {analytics["total_leads"]}")
-        st.markdown(f"**{get_ui_text("avg_score", language, "Avg Score")}:** {analytics["average_score"]:.1f}")
-
-def render_integrations_page():
-    """Render the integrations configuration page."""
-    language = st.session_state.get("language", "en")
-    
-    st.title(get_ui_text("integrations_title", language, "🔗 Integrations"))
-    
-    # Get available integrations
-    integrations = crm_manager.get_available_integrations()
-    
-    # Group integrations by category
-    categories = {}
-    for integration in integrations:
-        category = integration["category"]
-        if category not in categories:
-            categories[category] = []
-        categories[category].append(integration)
-    
-    # Render integration categories
-    for category, category_integrations in categories.items():
-        st.subheader(f"{category} Integrations")
-        
-        for integration in category_integrations:
-            with st.expander(f"{integration["icon"]} {integration["name"]}", expanded=False):
-                st.write(integration["description"])
-                
-                status = integration["status"]
-                status_colors = {
-                    "enabled": "🟢",
-                    "configured": "🟡", 
-                    "disabled": "🔴"
-                }
-                
-                st.write(f"**Status:** {status_colors.get(status, "⚪")} {status.title()}")
-                
-                # Configuration form based on integration type
-                if integration["id"] == "hubspot":
-                    render_hubspot_config(integration["id"], language)
-                elif integration["id"] == "slack":
-                    render_slack_config(integration["id"], language)
-                elif integration["id"] == "webhook":
-                    render_webhook_config(integration["id"], language)
-                # Add more integration configs as needed
-
-def render_hubspot_config(integration_id: str, language: str):
-    """Render HubSpot configuration form."""
-    st.write("**Configuration:**")
-    
-    api_key = st.text_input(
-        "HubSpot API Key",
-        type="password",
-        key=f"{integration_id}_api_key"
-    )
-    
-    portal_id = st.text_input(
-        "Portal ID",
-        key=f"{integration_id}_portal_id"
-    )
-    
-    enabled = st.checkbox(
-        "Enable Integration",
-        key=f"{integration_id}_enabled"
-    )
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Save Configuration", key=f"{integration_id}_save"):
-            config = {
-                "api_key": api_key,
-                "portal_id": portal_id,
-                "enabled": enabled
-            }
-            
-            if crm_manager.configure_integration(integration_id, config):
-                st.success("Configuration saved!")
-            else:
-                st.error("Failed to save configuration!")
-    
-    with col2:
-        if st.button("Test Connection", key=f"{integration_id}_test"):
-            if crm_manager.test_integration(integration_id):
-                st.success("✅ Connection successful!")
-            else:
-                st.error("❌ Connection failed!")
-
-def render_slack_config(integration_id: str, language: str):
-    """Render Slack configuration form."""
-    st.write("**Configuration:**")
-    
-    webhook_url = st.text_input(
-        "Slack Webhook URL",
-        type="password",
-        key=f"{integration_id}_webhook"
-    )
-    
-    enabled = st.checkbox(
-        "Enable Integration",
-        key=f"{integration_id}_enabled"
-    )
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Save Configuration", key=f"{integration_id}_save"):
-            config = {
-                "webhook_url": webhook_url,
-                "enabled": enabled
-            }
-            
-            if crm_manager.configure_integration(integration_id, config):
-                st.success("Configuration saved!")
-            else:
-                st.error("Failed to save configuration!")
-    
-    with col2:
-        if st.button("Test Connection", key=f"{integration_id}_test"):
-            if crm_manager.test_integration(integration_id):
-                st.success("✅ Connection successful!")
-            else:
-                st.error("❌ Connection failed!")
-
-def render_webhook_config(integration_id: str, language: str):
-    """Render webhook configuration form."""
-    st.write("**Configuration:**")
-    
-    webhook_url = st.text_input(
-        "Webhook URL",
-        key=f"{integration_id}_webhook"
-    )
-    
-    headers = st.text_area(
-        "Custom Headers (JSON format)",
-        placeholder="{\"Authorization\": \"Bearer token\", \"Content-Type\": \"application/json\"}",
-        key=f"{integration_id}_headers"
-    )
-    
-    enabled = st.checkbox(
-        "Enable Integration",
-        key=f"{integration_id}_enabled"
-    )
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Save Configuration", key=f"{integration_id}_save"):
-            config = {
-                "webhook_url": webhook_url,
-                "enabled": enabled
-            }
-            
-            if headers:
-                try:
-                    config["headers"] = json.loads(headers)
-                except json.JSONDecodeError:
-                    st.error("Invalid JSON format for headers!")
-                    return
-            
-            if crm_manager.configure_integration(integration_id, config):
-                st.success("Configuration saved!")
-            else:
-                st.error("Failed to save configuration!")
-    
-    with col2:
-        if st.button("Test Connection", key=f"{integration_id}_test"):
-            if crm_manager.test_integration(integration_id):
-                st.success("✅ Connection successful!")
-            else:
-                st.error("❌ Connection failed!")
+    # Save Settings
+    if st.button("💾 Save Settings", type="primary"):
+        if save_config(config):
+            st.success("✅ Settings saved!")
+            st.rerun()
+        else:
+            st.error("❌ Failed to save settings")
 
 def check_admin_access():
     """Check if user has admin access."""
-    # Check URL parameters for admin access
     query_params = st.experimental_get_query_params()
-    
-    if "admin" in query_params and not st.session_state.admin_authenticated:
-        st.title("🔐 Admin Login")
-        
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        
-        if st.button("Login"):
-            # Simple authentication (in production, use proper authentication)
-            config = st.session_state.config
-            admin_config = config.get("admin", {})
-            
-            if (username == admin_config.get("username", "admin") and 
-                hashlib.sha256(password.encode()).hexdigest() == admin_config.get("password_hash", 
-                "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9")):  # admin123
-                st.session_state.admin_authenticated = True
-                st.success("Login successful!")
-                st.rerun()
-            else:
-                st.error("Invalid credentials!")
-        
-        st.stop()
-    
     return "admin" in query_params and st.session_state.admin_authenticated
 
 def main():
@@ -758,13 +783,11 @@ def main():
         render_dashboard_page()
     elif current_page == "settings":
         render_settings_page()
-    elif current_page == "integrations":
-        render_integrations_page()
     
     # Add footer
     st.markdown("---")
     st.markdown(
-        f"<div style=\"text-align: center; color: #666; font-size: 12px;\">"
+        f"<div style='text-align: center; color: #666; font-size: 12px;'>"
         f"Powered by Lia AI Assistant | LeadPulse Platform | Session: {session_id[:8]}..."
         f"</div>",
         unsafe_allow_html=True
