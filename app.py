@@ -755,9 +755,9 @@ def render_settings_page():
 
 def check_admin_access():
     """Check if user has admin access."""
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params
     return "admin" in query_params and st.session_state.admin_authenticated
-
+    
 def main():
     """Main application function."""
     # Initialize session state
