@@ -1,7 +1,8 @@
 import streamlit as st
-from typing import Dict, List, Optional
+from typing import Dict, List
 import json
 import re
+import os
 from openai import OpenAI
 
 # Translation dictionaries for UI elements
@@ -75,7 +76,7 @@ TRANSLATIONS = {
 LEAD_EXTRACTION_PATTERNS = {
     "email": {
         "en": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}",
-        "zh": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}",  # Email format is universal
+        "zh": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}",
         "es": r"[\w.\-+%]+@[\w.-]+\.[a-zA-Z]{2,}"
     },
     "name": {
@@ -100,16 +101,16 @@ LEAD_EXTRACTION_PATTERNS = {
     },
     "company": {
         "en": [
-            r"(?:work at|work for|employed by|company is|from)\s+([A-Za-z0-9\s&.,'-]{2,50})",
-            r"(?:at|@)\s+([A-Z][A-Za-z0-9\s&.,'-]{1,49})\s*(?:company|corp|inc|ltd|llc)?"
+            r"(?:work at|work for|employed by|company is|from)\s+([A-Za-z0-9\s&.,\'-]{2,50})",
+            r"(?:at|@)\s+([A-Z][A-Za-z0-9\s&.,\'-]{1,49})\s*(?:company|corp|inc|ltd|llc)?"
         ],
         "zh": [
-            r"(?:在|工作在|公司是|来自)\s*([\u4e00-\u9fa5A-Za-z0-9\s&.,'-]{2,30})",
-            r"(?:公司|企业|单位)(?:是|叫)?\s*([\u4e00-\u9fa5A-Za-z0-9\s&.,'-]{2,30})"
+            r"(?:在|工作在|公司是|来自)\s*([\u4e00-\u9fa5A-Za-z0-9\s&.,\'-]{2,30})",
+            r"(?:公司|企业|单位)(?:是|叫)?\s*([\u4e00-\u9fa5A-Za-z0-9\s&.,\'-]{2,30})"
         ],
         "es": [
-            r"(?:trabajo en|trabajo para|empleado por|empresa es|de la empresa)\s+([A-Za-zÀ-ÿ0-9\s&.,'-]{2,50})",
-            r"(?:en|@)\s+([A-Za-zÀ-ÿ0-9\s&.,'-]{2,50})\s*(?:empresa|corp|inc|ltd)?"
+            r"(?:trabajo en|trabajo para|empleado por|empresa es|de la empresa)\s+([A-Za-zÀ-ÿ0-9\s&.,\'-]{2,50})",
+            r"(?:en|@)\s+([A-Za-zÀ-ÿ0-9\s&.,\'-]{2,50})\s*(?:empresa|corp|inc|ltd)?"
         ]
     },
     "interest": {
@@ -142,189 +143,157 @@ LEAD_EXTRACTION_PATTERNS = {
     }
 }
 
+# OpenAI client initialization (cached to avoid repeated calls)
+@st.cache_resource
+def get_openai_client():
+    api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        st.error("OpenAI API key not found. Provide it in Streamlit secrets or environment variables.")
+        st.stop()
+    return OpenAI(api_key=api_key)
+
+client = get_openai_client()
+
+
+def get_ui_text(key: str, language: str = "en") -> str:
+    """Get UI text in the target language."""
+    return TRANSLATIONS.get(language, TRANSLATIONS["en"]).get(key, key)
+
+
 def detect_language(text: str) -> str:
-    """Detect language from user input using simple heuristics and OpenAI fallback."""
+    """Detect language from user input using heuristics, fallback to OpenAI."""
     if not text:
         return "en"
-    
-    # Simple heuristic detection first (faster)
+    # Simple heuristics for Chinese characters
     chinese_chars = len(re.findall(r'[\u4e00-\u9fa5]', text))
-    spanish_chars = len(re.findall(r'[ñáéíóúü]', text.lower()))
-    
-    # If significant Chinese characters, likely Chinese
     if chinese_chars > len(text) * 0.3:
         return "zh"
-    
-    # If Spanish characters or common Spanish words
+    # Simple heuristics for Spanish characters and keywords
+    spanish_chars = len(re.findall(r'[ñáéíóúü]', text.lower()))
     spanish_words = ['el', 'la', 'es', 'en', 'de', 'que', 'y', 'con', 'por', 'para', 'hola', 'soy', 'estoy']
-    if spanish_chars > 0 or any(word in text.lower().split() for word in spanish_words):
+    if spanish_chars > 0 or any(w in text.lower().split() for w in spanish_words):
         return "es"
-    
-    # Try OpenAI detection for ambiguous cases
+
+    # Fallback to OpenAI language detection
     try:
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Detect the language of the text. Respond with only 'en' for English, 'zh' for Chinese, or 'es' for Spanish."},
-                {"role": "user", "content": f"Language of: '{text[:200]}'"}  # Limit text length
+                {"role": "system", "content": "Detect the language of the text. Respond only with 'en', 'zh', or 'es'."},
+                {"role": "user", "content": f"Language of: {text[:200]}"}
             ],
             max_tokens=5,
             temperature=0
         )
         detected = response.choices[0].message.content.strip().lower()
-        
-        if detected in ["en", "zh", "es"]:
+        if detected in ("en", "zh", "es"):
             return detected
     except Exception as e:
-        print(f"Language detection error: {e}")
-    
-    return "en"  # Default to English
+        st.warning(f"Language detection failed: {e}")
 
-def translate_text(text: str, target_language: str, source_language: str = "auto") -> str:
-    """Translate text to target language using OpenAI."""
-    if not text or target_language == "en":
-        return text
-    
-    try:
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        
-        language_names = {"en": "English", "zh": "Chinese", "es": "Spanish"}
-        target_lang_name = language_names.get(target_language, "English")
-        
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system", 
-                    "content": f"You are a professional translator. Translate the following text to {target_lang_name}. Maintain the tone and context. Only return the translation, no explanations."
-                },
-                {"role": "user", "content": text}
-            ],
-            max_tokens=500,
-            temperature=0.3
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Translation error: {e}")
-        return text  # Return original text on error
+    return "en"
 
-def get_ui_text(key: str, language: str = "en") -> str:
-    """Get UI text in the specified language."""
-    if language in TRANSLATIONS and key in TRANSLATIONS[language]:
-        return TRANSLATIONS[language][key]
-    return TRANSLATIONS["en"].get(key, key)  # Fallback to English or key itself
 
 def extract_lead_info_multilingual(user_input: str, language: str, lead_data: Dict) -> Dict:
-    """Extract lead information using language-specific patterns."""
+    """Extract lead info from user input based on language-specific patterns."""
     if not user_input:
         return lead_data
-    
+
     updated = False
-    
-    # Email extraction (universal format)
+    # EMAIL extraction (same pattern for all)
     if not lead_data.get("email"):
-        email_pattern = LEAD_EXTRACTION_PATTERNS["email"].get(language, LEAD_EXTRACTION_PATTERNS["email"]["en"])
-        email_match = re.search(email_pattern, user_input, re.IGNORECASE)
-        if email_match:
-            lead_data["email"] = email_match.group().lower()
-            st.toast(f"📧 {get_ui_text('email_prompt', language)}: {lead_data['email']}")
+        pattern = LEAD_EXTRACTION_PATTERNS["email"].get(language, LEAD_EXTRACTION_PATTERNS["email"]["en"])
+        match = re.search(pattern, user_input, re.IGNORECASE)
+        if match:
+            lead_data["email"] = match.group().lower()
+            st.success(f"📧 {get_ui_text('email_prompt', language)}: {lead_data['email']}")
             updated = True
-    
-    # Name extraction
+
+    # NAME extraction
     if not lead_data.get("name"):
-        name_patterns = LEAD_EXTRACTION_PATTERNS["name"].get(language, LEAD_EXTRACTION_PATTERNS["name"]["en"])
-        for pattern in name_patterns:
-            name_match = re.search(pattern, user_input, re.IGNORECASE)
-            if name_match:
-                name = name_match.group(1).strip().title()
-                # Filter out common false positives
+        patterns = LEAD_EXTRACTION_PATTERNS["name"].get(language, LEAD_EXTRACTION_PATTERNS["name"]["en"])
+        for pattern in patterns:
+            match = re.search(pattern, user_input, re.IGNORECASE)
+            if match:
+                name = match.group(1).strip().title()
                 if len(name) > 1 and not any(word in name.lower() for word in ['email', 'phone', 'number', 'address']):
                     lead_data["name"] = name
-                    st.toast(f"👤 {get_ui_text('name_prompt', language)}: {lead_data['name']}")
+                    st.success(f"👤 {get_ui_text('name_prompt', language)}: {lead_data['name']}")
                     updated = True
                     break
-    
-    # Phone extraction
+
+    # PHONE extraction
     if not lead_data.get("phone"):
-        phone_pattern = LEAD_EXTRACTION_PATTERNS["phone"].get(language, LEAD_EXTRACTION_PATTERNS["phone"]["en"])
-        phone_match = re.search(phone_pattern, user_input)
-        if phone_match:
-            phone = re.sub(r'[()\s-]', '', phone_match.group())
-            if len(phone) >= 10:  # Valid phone number length
-                lead_data["phone"] = phone_match.group()
-                st.toast(f"📞 {get_ui_text('phone_prompt', language)}: {lead_data['phone']}")
+        pattern = LEAD_EXTRACTION_PATTERNS["phone"].get(language, LEAD_EXTRACTION_PATTERNS["phone"]["en"])
+        match = re.search(pattern, user_input)
+        if match:
+            phone = re.sub(r'[()\s-]', '', match.group())
+            if len(phone) >= 10:  # basic validation
+                lead_data["phone"] = match.group()
+                st.success(f"📞 {get_ui_text('phone_prompt', language)}: {lead_data['phone']}")
                 updated = True
-    
-    # Company extraction
+
+    # COMPANY extraction
     if not lead_data.get("company"):
-        company_patterns = LEAD_EXTRACTION_PATTERNS["company"].get(language, LEAD_EXTRACTION_PATTERNS["company"]["en"])
-        for pattern in company_patterns:
-            company_match = re.search(pattern, user_input, re.IGNORECASE)
-            if company_match:
-                company = company_match.group(1).strip().title()
-                # Filter out common false positives
+        patterns = LEAD_EXTRACTION_PATTERNS["company"].get(language, LEAD_EXTRACTION_PATTERNS["company"]["en"])
+        for pattern in patterns:
+            match = re.search(pattern, user_input, re.IGNORECASE)
+            if match:
+                company = match.group(1).strip().title()
                 if len(company) > 2 and not any(word in company.lower() for word in ['email', 'phone', 'number']):
                     lead_data["company"] = company
-                    st.toast(f"🏢 {get_ui_text('company_prompt', language)}: {lead_data['company']}")
+                    st.success(f"🏢 {get_ui_text('company_prompt', language)}: {lead_data['company']}")
                     updated = True
                     break
-    
-    # Interest extraction
+
+    # INTEREST extraction
     if not lead_data.get("interest"):
-        interest_patterns = LEAD_EXTRACTION_PATTERNS["interest"].get(language, LEAD_EXTRACTION_PATTERNS["interest"]["en"])
-        for pattern in interest_patterns:
-            interest_match = re.search(pattern, user_input, re.IGNORECASE)
-            if interest_match:
-                interest = interest_match.group(1).strip()
-                # Avoid capturing overly long or short interests
+        patterns = LEAD_EXTRACTION_PATTERNS["interest"].get(language, LEAD_EXTRACTION_PATTERNS["interest"]["en"])
+        for pattern in patterns:
+            match = re.search(pattern, user_input, re.IGNORECASE)
+            if match:
+                interest = match.group(1).strip()
                 if 5 <= len(interest) <= 100:
                     lead_data["interest"] = interest
-                    st.toast(f"💡 {get_ui_text('interest_prompt', language)}: {lead_data['interest']}")
+                    st.success(f"💡 {get_ui_text('interest_prompt', language)}: {lead_data['interest']}")
                     updated = True
                     break
-    
-    # Budget extraction
+
+    # BUDGET extraction
     if not lead_data.get("budget"):
-        budget_patterns = LEAD_EXTRACTION_PATTERNS["budget"].get(language, LEAD_EXTRACTION_PATTERNS["budget"]["en"])
-        for pattern in budget_patterns:
-            budget_match = re.search(pattern, user_input, re.IGNORECASE)
-            if budget_match:
-                budget = budget_match.group(1)
+        patterns = LEAD_EXTRACTION_PATTERNS["budget"].get(language, LEAD_EXTRACTION_PATTERNS["budget"]["en"])
+        for pattern in patterns:
+            match = re.search(pattern, user_input, re.IGNORECASE)
+            if match:
+                budget = match.group(1)
                 lead_data["budget"] = budget
-                st.toast(f"💰 {get_ui_text('budget_prompt', language)}: ${budget}")
+                st.success(f"💰 {get_ui_text('budget_prompt', language)}: ${budget}")
                 updated = True
                 break
-    
+
     return lead_data
 
-def calculate_lead_score(lead_data: Dict, config: Dict) -> int:
-    """Calculate lead score based on available information."""
+
+def calculate_lead_score(lead_data: Dict) -> int:
+    """Calculate lead score based on presence of fields."""
     score = 0
-    scoring_config = config.get("lead_qualification", {}).get("scoring", {})
-    
     if lead_data.get("email"):
-        score += scoring_config.get("email_provided", 30)
-    
+        score += 30
     if lead_data.get("phone"):
-        score += scoring_config.get("phone_provided", 20)
-    
+        score += 20
     if lead_data.get("company"):
-        score += scoring_config.get("company_provided", 15)
-    
+        score += 15
     if lead_data.get("budget"):
-        score += scoring_config.get("budget_provided", 15)
-    
+        score += 15
     if lead_data.get("interest"):
-        score += scoring_config.get("timeline_provided", 10)
-    
+        score += 10
     if lead_data.get("name"):
-        score += 10  # Bonus for having name
-    
-    return min(score, 100)  # Cap at 100
+        score += 10
+    return min(score, 100)
+
 
 def get_lead_priority(score: int, language: str = "en") -> tuple:
-    """Get lead priority based on score."""
+    """Return priority label and emoji based on lead score."""
     if score >= 70:
         return ("high", get_ui_text("high_priority", language), "🔥")
     elif score >= 40:
@@ -332,92 +301,56 @@ def get_lead_priority(score: int, language: str = "en") -> tuple:
     else:
         return ("low", get_ui_text("low_priority", language), "📝")
 
+
 def format_lead_summary(lead_data: Dict, language: str = "en") -> str:
-    """Format lead data into a readable summary."""
-    summary_parts = []
-    
+    """Format lead info summary string."""
+    parts = []
     if lead_data.get("name"):
-        summary_parts.append(f"👤 **{get_ui_text('name_prompt', language)[:-1]}:** {lead_data['name']}")
-    
+        parts.append(f"👤 **{get_ui_text('name_prompt', language)[:-1]}:** {lead_data['name']}")
     if lead_data.get("email"):
-        summary_parts.append(f"📧 **Email:** {lead_data['email']}")
-    
+        parts.append(f"📧 **Email:** {lead_data['email']}")
     if lead_data.get("phone"):
-        summary_parts.append(f"📞 **{get_ui_text('phone_prompt', language)[:-1]}:** {lead_data['phone']}")
-    
+        parts.append(f"📞 **{get_ui_text('phone_prompt', language)[:-1]}:** {lead_data['phone']}")
     if lead_data.get("company"):
-        summary_parts.append(f"🏢 **{get_ui_text('company_prompt', language)[:-1]}:** {lead_data['company']}")
-    
+        parts.append(f"🏢 **{get_ui_text('company_prompt', language)[:-1]}:** {lead_data['company']}")
     if lead_data.get("interest"):
-        summary_parts.append(f"💡 **{get_ui_text('interest_prompt', language)[:-1]}:** {lead_data['interest']}")
-    
+        parts.append(f"💡 **{get_ui_text('interest_prompt', language)[:-1]}:** {lead_data['interest']}")
     if lead_data.get("budget"):
-        summary_parts.append(f"💰 **{get_ui_text('budget_prompt', language)[:-1]}:** ${lead_data['budget']}")
-    
-    return "\n".join(summary_parts) if summary_parts else f"*{get_ui_text('lead_captured', language)}*"
+        parts.append(f"💰 **{get_ui_text('budget_prompt', language)[:-1]}:** ${lead_data['budget']}")
+    if not parts:
+        return f"*{get_ui_text('lead_captured', language)}*"
+    return "\n".join(parts)
 
-def get_language_specific_system_prompt(base_prompt: str, language: str) -> str:
-    """Modify system prompt for specific language."""
-    language_instructions = {
-        "en": "Respond in English. Use natural, conversational English.",
-        "zh": "用中文回复。使用自然、对话式的中文。保持友好和专业的语调。",
-        "es": "Responde en español. Usa español natural y conversacional. Mantén un tono amigable y profesional."
-    }
-    
-    lang_instruction = language_instructions.get(language, language_instructions["en"])
-    
-    return f"{base_prompt}\n\nIMPORTANT: {lang_instruction}"
 
-def render_language_selector():
-    """Render language selector in sidebar."""
-    st.sidebar.subheader("🌍 Language / 语言 / Idioma")
-    
-    languages = {
-        "en": "🇺🇸 English",
-        "zh": "🇨🇳 中文",
-        "es": "🇪🇸 Español"
-    }
-    
-    current_language = st.session_state.get("language", "en")
-    
-    selected_language = st.sidebar.selectbox(
-        "Select Language",
-        options=list(languages.keys()),
-        format_func=lambda x: languages[x],
-        index=list(languages.keys()).index(current_language),
-        key="language_selector"
-    )
-    
-    if selected_language != current_language:
-        st.session_state.language = selected_language
-        st.rerun()
-    
-    return selected_language
+# Main Streamlit app UI
+def main():
+    st.title("LeadPulse Multilingual Lead Capture AI")
 
-def get_conversation_starters(language: str) -> List[str]:
-    """Get conversation starters in the specified language."""
-    starters = {
-        "en": [
-            "Hi! How can I help you today?",
-            "What brings you here?",
-            "What are you looking for?",
-            "How can I assist you?",
-            "What can I help you with?"
-        ],
-        "zh": [
-            "您好！今天我能为您做些什么？",
-            "是什么带您来到这里？",
-            "您在寻找什么？",
-            "我能为您提供什么帮助？",
-            "有什么我可以帮助您的吗？"
-        ],
-        "es": [
-            "¡Hola! ¿Cómo puedo ayudarte hoy?",
-            "¿Qué te trae por aquí?",
-            "¿Qué estás buscando?",
-            "¿Cómo puedo asistirte?",
-            "¿En qué puedo ayudarte?"
-        ]
-    }
-    
-    return starters.get(language, starters["en"])
+    if 'lead_data' not in st.session_state:
+        st.session_state.lead_data = {}
+
+    user_text = st.text_area(get_ui_text('input_placeholder'), height=100)
+    if st.button(get_ui_text('send_button')):
+        if not user_text.strip():
+            st.warning("Please enter a message.")
+            return
+        language = detect_language(user_text)
+        st.write(f"Detected language: {language}")
+
+        # Extract lead info from input and update session state
+        st.session_state.lead_data = extract_lead_info_multilingual(user_text, language, st.session_state.lead_data)
+
+        # Show lead summary
+        summary = format_lead_summary(st.session_state.lead_data, language)
+        st.markdown("### Lead Summary")
+        st.markdown(summary)
+
+        # Calculate and show lead score and priority
+        score = calculate_lead_score(st.session_state.lead_data)
+        priority_key, priority_label, emoji = get_lead_priority(score, language)
+        st.markdown(f"**{get_ui_text('lead_score', language)}:** {score}")
+        st.markdown(f"**{priority_label}** {emoji}")
+
+
+if __name__ == "__main__":
+    main()
